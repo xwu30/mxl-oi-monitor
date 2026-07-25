@@ -1,0 +1,34 @@
+name: Add symbol
+
+on:
+  workflow_dispatch:
+    inputs:
+      symbol:
+        description: '股票代码（如 NVDA、AAPL）'
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  add:
+    runs-on: ubuntu-latest
+    env:
+      SYM_INPUT: ${{ inputs.symbol }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Validate and register symbol
+        run: node add-symbol.mjs "$SYM_INPUT"
+      - name: Initial snapshot
+        run: SYMBOL="$SYM_INPUT" node fetch.mjs
+      - name: Commit
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add symbols.json data
+          git diff --cached --quiet || git commit -m "add symbol: $SYM_INPUT"
+          git pull --rebase
+          git push
