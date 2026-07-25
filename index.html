@@ -18,8 +18,8 @@
     --border:     rgba(11,11,11,0.10);
     --call:       #2a78d6;   /* categorical slot 1 */
     --put:        #1baf7a;   /* categorical slot 2 */
-    --up:         #2a78d6;   /* diverging pole: OI 增加 */
-    --down:       #e34948;   /* diverging pole: OI 减少 */
+    --up:         #2a78d6;   /* diverging pole: 增加 */
+    --down:       #e34948;   /* diverging pole: 减少 */
     --up-text:    #1c5cab;
     --down-text:  #c22f2e;
     --tile:       #f0efec;
@@ -91,54 +91,65 @@
   }
   #tooltip .t { color: var(--muted); }
   .msg { padding: 30px; text-align: center; color: var(--muted); }
+  .hint { background: var(--tile); border-radius: 8px; padding: 8px 12px; font-size: 12px; color: var(--ink-2); margin: 10px 0; }
   footer { color: var(--muted); font-size: 12px; margin: 18px 4px; }
 </style>
 </head>
 <body>
 <div class="wrap">
-  <h1>MXL 期权未平仓量（OI）每日变化</h1>
+  <h1>MXL 期权未平仓量（OI）监控</h1>
   <div class="sub" id="subline">加载中…</div>
 
   <div class="tiles" id="tiles"></div>
 
   <div class="filters">
+    <div><label for="selMode">视图</label><select id="selMode">
+      <option value="daily">日度 OI 变化</option>
+      <option value="intra">盘中活动（成交量）</option>
+    </select></div>
     <div><label for="selExp">到期日</label><select id="selExp"></select></div>
-    <div><label for="selCur">数据日期</label><select id="selCur"></select></div>
-    <div><label for="selBase">对比基准日</label><select id="selBase"></select></div>
+    <div id="boxDay" style="display:none"><label for="selDay">日期</label><select id="selDay"></select></div>
+    <div><label for="selCur" id="lblCur">数据日期</label><select id="selCur"></select></div>
+    <div><label for="selBase" id="lblBase">对比基准日</label><select id="selBase"></select></div>
+  </div>
+
+  <div class="hint" id="intraHint" style="display:none">
+    ℹ️ 未平仓量（OI）由 OCC 每天清晨只结算一次，<b>盘中不会变化</b>——盘中真正实时变化的是<b>当天累计成交量</b>。
+    下方显示两个时间点之间每个行权价<b>新增的成交量</b>：这些新成交会在<b>下一个交易日早上</b>结算成 OI 的增减（切回「日度 OI 变化」视图查看）。
   </div>
 
   <div class="card">
-    <h2>OI 变化 ΔOI（按行权价）</h2>
+    <h2 id="deltaTitle">OI 变化 ΔOI（按行权价）</h2>
     <div class="note" id="deltaNote"></div>
     <div class="legend">
       <span><span class="sw" style="background:var(--up)"></span>增加 ▲</span>
       <span><span class="sw" style="background:var(--down)"></span>减少 ▼</span>
     </div>
-    <div class="panel-title">Call ΔOI</div>
+    <div class="panel-title" id="callPanelTitle">Call ΔOI</div>
     <div class="chartscroll" id="chartDeltaCall"></div>
     <div class="panel-title" id="putPanelTitle">Put ΔOI</div>
     <div class="chartscroll" id="chartDeltaPut"></div>
   </div>
 
   <div class="card">
-    <h2>当前 OI 分布（按行权价）</h2>
+    <h2 id="distTitle">当前 OI 分布（按行权价）</h2>
     <div class="note" id="distNote"></div>
     <div class="legend">
-      <span><span class="sw" style="background:var(--call)"></span>Call OI</span>
-      <span><span class="sw" style="background:var(--put)"></span>Put OI</span>
+      <span><span class="sw" style="background:var(--call)"></span><span id="legDistA">Call OI</span></span>
+      <span><span class="sw" style="background:var(--put)"></span><span id="legDistB">Put OI</span></span>
     </div>
     <div class="chartscroll" id="chartDist"></div>
   </div>
 
   <div class="card">
     <h2>明细表</h2>
-    <div class="note">Δ 为「数据日期」相对「对比基准日」的变化；灰底行为最接近现价的行权价。</div>
+    <div class="note" id="tableNote"></div>
     <div class="tablewrap" id="tableBox"></div>
   </div>
 
   <footer>
-    数据来源：CBOE 延迟行情（免费公开接口）。未平仓量由 OCC 每个交易日早间更新，反映上一交易日收盘后的持仓；
-    本站每个交易日 7:00am ET 自动抓取快照。<span id="fetchedAt"></span>
+    数据来源：CBOE 延迟行情（免费公开接口，约延迟 15 分钟）。OI 由 OCC 每个交易日早间更新，反映上一交易日收盘后的持仓，
+    日度快照每交易日 7:00am ET 抓取；盘中快照开市时段每小时抓取一次（保留最近 14 天）。<span id="fetchedAt"></span>
   </footer>
 </div>
 <div id="tooltip"></div>
@@ -146,17 +157,20 @@
 <script>
 const $ = id => document.getElementById(id);
 const fmt = n => n.toLocaleString('en-US');
+const hm = t => t.slice(0, 2) + ':' + t.slice(2);
 const cache = new Map();
-let INDEX = null;
+let INDEX = null, INTRA = null;
 
-async function loadSnap(date) {
-  if (!cache.has(date)) {
-    const r = await fetch(`data/${date}.json`);
-    if (!r.ok) throw new Error(`missing snapshot ${date}`);
-    cache.set(date, await r.json());
+async function loadJSON(url) {
+  if (!cache.has(url)) {
+    const r = await fetch(url);
+    if (!r.ok) throw new Error(`加载失败 ${url}`);
+    cache.set(url, await r.json());
   }
-  return cache.get(date);
+  return cache.get(url);
 }
+const loadSnap = date => loadJSON(`data/${date}.json`);
+const loadIntra = (day, time) => loadJSON(`data/intraday/${day}/${time}.json`);
 
 // rows for one snapshot filtered by expiry ('ALL' aggregates across expiries by strike)
 function rowsOf(snap, expiry) {
@@ -182,6 +196,8 @@ function buildDiff(cur, base, expiry) {
       c: r.c, p: r.p, cv: r.cv, pv: r.pv,
       dc: b ? r.c - (o ? o.c : 0) : null,
       dp: b ? r.p - (o ? o.p : 0) : null,
+      dcv: b ? r.cv - (o ? o.cv : 0) : null,
+      dpv: b ? r.pv - (o ? o.pv : 0) : null,
       isNew: b ? !o : false,
     };
   });
@@ -241,14 +257,13 @@ function axisTicks(rows, layout, h, spot) {
   return s;
 }
 
-function renderDelta(box, rows, key, spot, baseDate) {
+function renderDelta(box, rows, key, spot, baseLabel, metric, series) {
   const data = rows.map(r => ({ strike: r.strike, v: r[key] ?? 0, isNew: r.isNew }));
   const H = 190, L = xLayout(data.length, 8, 1);
   const maxAbs = Math.max(1, ...data.map(d => Math.abs(d.v)));
   const top = 22, bottom = 24, mid = top + (H - top - bottom) / 2, half = (H - top - bottom) / 2;
   const y = v => mid - (v / maxAbs) * half;
   const up = CSS('--up'), down = CSS('--down');
-  const label = key === 'dc' ? 'Call' : 'Put';
   let bars = '';
   let maxUp = null, maxDn = null;
   data.forEach(d => {
@@ -258,7 +273,7 @@ function renderDelta(box, rows, key, spot, baseDate) {
   data.forEach((d, i) => {
     const x = L.padL + i * L.slot + (L.slot - 8) / 2;
     const sign = d.v > 0 ? '+' : '';
-    const tipTxt = `<b>${label} $${d.strike}</b>${d.isNew ? ' <span class=t>(新增档位)</span>' : ''}<br>ΔOI: <b>${sign}${fmt(d.v)}</b> <span class=t>vs ${baseDate}</span>`;
+    const tipTxt = `<b>${series} $${d.strike}</b>${d.isNew ? ' <span class=t>(新增档位)</span>' : ''}<br>${metric}: <b>${sign}${fmt(d.v)}</b> <span class=t>vs ${baseLabel}</span>`;
     // invisible full-height hit target (wider than the mark)
     bars += `<rect x="${x - 3}" y="${top}" width="14" height="${H - top - bottom}" fill="transparent" data-tip="${tipTxt.replace(/"/g, '&quot;')}"/>`;
     if (d.v === 0) return;
@@ -274,28 +289,28 @@ function renderDelta(box, rows, key, spot, baseDate) {
       bars += `<text x="${x + 4}" y="${ly}" text-anchor="middle" font-size="10" font-weight="600" fill="${CSS('--ink-2')}">${sign}${fmt(d.v)}</text>`;
     }
   });
-  const svg = `<svg width="${Math.max(L.width, 320)}" height="${H}" role="img" aria-label="${label} 每个行权价的未平仓量变化柱状图">
+  const svg = `<svg width="${Math.max(L.width, 320)}" height="${H}" role="img" aria-label="${series} 每个行权价的${metric}柱状图">
     <line x1="${L.padL - 6}" y1="${mid}" x2="${L.width - L.padR + 4}" y2="${mid}" stroke="${CSS('--baseline')}" stroke-width="1"/>
     <text x="${L.padL - 10}" y="${y(maxAbs) + 4}" text-anchor="end" font-size="10" fill="${CSS('--muted')}">+${fmt(maxAbs)}</text>
     <text x="${L.padL - 10}" y="${mid + 4}" text-anchor="end" font-size="10" fill="${CSS('--muted')}">0</text>
     <text x="${L.padL - 10}" y="${y(-maxAbs) + 4}" text-anchor="end" font-size="10" fill="${CSS('--muted')}">-${fmt(maxAbs)}</text>
     ${bars}${axisTicks(rows, L, H, spot)}</svg>`;
-  box.innerHTML = data.every(d => d.v === 0) ? '<div class="msg">该区间内 OI 无变化</div>' : svg;
+  box.innerHTML = data.every(d => d.v === 0) ? '<div class="msg">该区间内无变化</div>' : svg;
   bindTips(box);
 }
 
-function renderDist(box, rows, spot) {
+function renderDist(box, rows, spot, ka, kb, nameA, nameB) {
   const H = 210, L = xLayout(rows.length, 6, 2);
-  const maxV = Math.max(1, ...rows.map(r => Math.max(r.c, r.p)));
+  const maxV = Math.max(1, ...rows.map(r => Math.max(r[ka], r[kb])));
   const top = 22, bottom = 24, plotH = H - top - bottom;
   const y = v => top + plotH - (v / maxV) * plotH;
   const call = CSS('--call'), put = CSS('--put');
   let bars = '';
   rows.forEach((r, i) => {
     const x0 = L.padL + i * L.slot + (L.slot - 14) / 2;
-    [['c', call, 'Call', 0], ['p', put, 'Put', 8]].forEach(([k, col, name, off]) => {
+    [[ka, call, nameA, 0], [kb, put, nameB, 8]].forEach(([k, col, name, off]) => {
       const v = r[k];
-      const tipTxt = `<b>$${r.strike}</b><br>${name} OI: <b>${fmt(v)}</b>`;
+      const tipTxt = `<b>$${r.strike}</b><br>${name}: <b>${fmt(v)}</b>`;
       bars += `<rect x="${x0 + off - 1}" y="${top}" width="8" height="${plotH}" fill="transparent" data-tip="${tipTxt.replace(/"/g, '&quot;')}"/>`;
       if (v > 0) {
         const h = Math.max(2, top + plotH - y(v));
@@ -304,7 +319,7 @@ function renderDist(box, rows, spot) {
       }
     });
   });
-  const svg = `<svg width="${Math.max(L.width, 320)}" height="${H}" role="img" aria-label="每个行权价的 Call 与 Put 未平仓量分布柱状图">
+  const svg = `<svg width="${Math.max(L.width, 320)}" height="${H}" role="img" aria-label="每个行权价的 ${nameA} 与 ${nameB} 分布柱状图">
     <line x1="${L.padL - 6}" y1="${top + plotH}" x2="${L.width - L.padR + 4}" y2="${top + plotH}" stroke="${CSS('--baseline')}" stroke-width="1"/>
     <line x1="${L.padL - 6}" y1="${y(maxV)}" x2="${L.width - L.padR + 4}" y2="${y(maxV)}" stroke="${CSS('--grid')}" stroke-width="1"/>
     <text x="${L.padL - 10}" y="${y(maxV) + 4}" text-anchor="end" font-size="10" fill="${CSS('--muted')}">${fmt(maxV)}</text>
@@ -323,20 +338,24 @@ function deltaCell(v, isNew) {
   return `<td class="${cls}"><b>${v > 0 ? '+' : ''}${fmt(v)}</b> ${arrow}${isNew ? ' <span class="badge-new">新</span>' : ''}</td>`;
 }
 
-function renderTable(rows, spot) {
+function renderTable(rows, spot, intra) {
   let nearIdx = -1, best = Infinity;
   rows.forEach((r, i) => { const d = Math.abs(r.strike - spot); if (d < best) { best = d; nearIdx = i; } });
-  let html = `<table><thead><tr>
-    <th>行权价</th>
-    <th class="sep">Call OI</th><th>ΔCall</th><th>Call 量</th>
-    <th class="sep">Put OI</th><th>ΔPut</th><th>Put 量</th>
-  </tr></thead><tbody>`;
+  const head = intra
+    ? `<th>行权价</th>
+       <th class="sep">Call 量</th><th>Δ量</th><th>Call OI</th>
+       <th class="sep">Put 量</th><th>Δ量</th><th>Put OI</th>`
+    : `<th>行权价</th>
+       <th class="sep">Call OI</th><th>ΔCall</th><th>Call 量</th>
+       <th class="sep">Put OI</th><th>ΔPut</th><th>Put 量</th>`;
+  let html = `<table><thead><tr>${head}</tr></thead><tbody>`;
   rows.forEach((r, i) => {
-    html += `<tr${i === nearIdx ? ' class="near"' : ''}>
-      <td class="strike">$${r.strike}</td>
-      <td class="sep">${fmt(r.c)}</td>${deltaCell(r.dc, r.isNew)}<td style="color:var(--ink-2)">${fmt(r.cv)}</td>
-      <td class="sep">${fmt(r.p)}</td>${deltaCell(r.dp, r.isNew)}<td style="color:var(--ink-2)">${fmt(r.pv)}</td>
-    </tr>`;
+    const cells = intra
+      ? `<td class="sep">${fmt(r.cv)}</td>${deltaCell(r.dcv, r.isNew)}<td style="color:var(--ink-2)">${fmt(r.c)}</td>
+         <td class="sep">${fmt(r.pv)}</td>${deltaCell(r.dpv, r.isNew)}<td style="color:var(--ink-2)">${fmt(r.p)}</td>`
+      : `<td class="sep">${fmt(r.c)}</td>${deltaCell(r.dc, r.isNew)}<td style="color:var(--ink-2)">${fmt(r.cv)}</td>
+         <td class="sep">${fmt(r.p)}</td>${deltaCell(r.dp, r.isNew)}<td style="color:var(--ink-2)">${fmt(r.pv)}</td>`;
+    html += `<tr${i === nearIdx ? ' class="near"' : ''}><td class="strike">$${r.strike}</td>${cells}</tr>`;
   });
   $('tableBox').innerHTML = html + '</tbody></table>';
 }
@@ -351,70 +370,138 @@ function signedSpan(v) {
   const cls = v > 0 ? 'updn-up' : 'updn-down';
   return `<span class="${cls}">${v > 0 ? '+' : ''}${fmt(v)} ${v > 0 ? '▲' : '▼'}</span>`;
 }
-function renderTiles(cur, rows, baseDate) {
-  const tc = rows.reduce((s, r) => s + r.c, 0), tp = rows.reduce((s, r) => s + r.p, 0);
-  const hasBase = rows.some(r => r.dc != null);
-  const dtc = hasBase ? rows.reduce((s, r) => s + (r.dc || 0), 0) : null;
-  const dtp = hasBase ? rows.reduce((s, r) => s + (r.dp || 0), 0) : null;
+function renderTiles(cur, rows, baseLabel, intra) {
+  const [kA, kB, dA, dB] = intra ? ['cv', 'pv', 'dcv', 'dpv'] : ['c', 'p', 'dc', 'dp'];
+  const tc = rows.reduce((s, r) => s + r[kA], 0), tp = rows.reduce((s, r) => s + r[kB], 0);
+  const hasBase = rows.some(r => r[dA] != null);
+  const dtc = hasBase ? rows.reduce((s, r) => s + (r[dA] || 0), 0) : null;
+  const dtp = hasBase ? rows.reduce((s, r) => s + (r[dB] || 0), 0) : null;
   const chg = cur.prev_close ? ((cur.spot - cur.prev_close) / cur.prev_close * 100).toFixed(2) : null;
+  const vs = hasBase ? ` <span style="color:var(--muted)">vs ${baseLabel}</span>` : '';
+  const name = intra ? '总成交量' : '总 OI';
   $('tiles').innerHTML =
     tile('正股价', `$${cur.spot}`, chg != null ? `较前收 ${chg > 0 ? '+' : ''}${chg}%` : '') +
-    tile('Call 总 OI', fmt(tc), `Δ ${signedSpan(dtc)}${hasBase ? ` <span style="color:var(--muted)">vs ${baseDate}</span>` : ''}`) +
-    tile('Put 总 OI', fmt(tp), `Δ ${signedSpan(dtp)}${hasBase ? ` <span style="color:var(--muted)">vs ${baseDate}</span>` : ''}`) +
-    tile('Put / Call 比', tc > 0 ? (tp / tc).toFixed(2) : '—', 'OI 口径');
+    tile(`Call ${name}`, fmt(tc), `Δ ${signedSpan(dtc)}${vs}`) +
+    tile(`Put ${name}`, fmt(tp), `Δ ${signedSpan(dtp)}${vs}`) +
+    tile('Put / Call 比', tc > 0 ? (tp / tc).toFixed(2) : '—', intra ? '成交量口径' : 'OI 口径');
 }
 
 // ---------- main ----------
 async function render() {
-  const curDate = $('selCur').value, baseDate = $('selBase').value, expiry = $('selExp').value;
-  const cur = await loadSnap(curDate);
-  const base = baseDate && baseDate !== 'NONE' ? await loadSnap(baseDate) : null;
+  const mode = $('selMode').value, expiry = $('selExp').value;
+  const intra = mode === 'intra';
+  let cur, base, curLabel, baseLabel;
+  if (intra) {
+    const day = $('selDay').value, t = $('selCur').value, b = $('selBase').value;
+    if (!day || !t) return;
+    cur = await loadIntra(day, t);
+    base = b && b !== 'NONE' ? await loadIntra(day, b) : null;
+    curLabel = `${day} ${hm(t)}`;
+    baseLabel = base ? `${hm(b)}` : null;
+  } else {
+    const c = $('selCur').value, b = $('selBase').value;
+    cur = await loadSnap(c);
+    base = b && b !== 'NONE' ? await loadSnap(b) : null;
+    curLabel = c;
+    baseLabel = base ? b : null;
+  }
   const rows = buildDiff(cur, base, expiry);
-  renderTiles(cur, rows, baseDate);
+  renderTiles(cur, rows, baseLabel, intra);
   const expTxt = expiry === 'ALL' ? '全部到期日合计' : `到期日 ${expiry}`;
+
+  const metric = intra ? 'Δ成交量' : 'ΔOI';
+  $('deltaTitle').textContent = intra ? '盘中新增成交量（按行权价）' : 'OI 变化 ΔOI（按行权价）';
+  $('callPanelTitle').textContent = `Call ${metric}`;
+  $('putPanelTitle').textContent = `Put ${metric}`;
   $('deltaNote').textContent = base
-    ? `${expTxt} · ${curDate} 相对 ${baseDate} 的变化`
-    : '暂无历史快照可对比——从第二个快照开始显示每日增减。';
-  $('distNote').textContent = `${expTxt} · 快照日期 ${curDate}`;
+    ? `${expTxt} · ${curLabel} 相对 ${baseLabel} 的变化`
+    : (intra ? '当天只有一个盘中快照时暂无对比——一小时后自动多一个时间点。' : '暂无历史快照可对比——从第二个快照开始显示每日增减。');
   if (base) {
-    renderDelta($('chartDeltaCall'), rows, 'dc', cur.spot, baseDate);
-    renderDelta($('chartDeltaPut'), rows, 'dp', cur.spot, baseDate);
+    renderDelta($('chartDeltaCall'), rows, intra ? 'dcv' : 'dc', cur.spot, baseLabel, metric, 'Call');
+    renderDelta($('chartDeltaPut'), rows, intra ? 'dpv' : 'dp', cur.spot, baseLabel, metric, 'Put');
     $('putPanelTitle').style.display = '';
   } else {
-    $('chartDeltaCall').innerHTML = '<div class="msg">明天开始有对比数据后自动显示</div>';
+    $('chartDeltaCall').innerHTML = `<div class="msg">${intra ? '等下一个整点快照后自动显示' : '明天开始有对比数据后自动显示'}</div>`;
     $('chartDeltaPut').innerHTML = '';
     $('putPanelTitle').style.display = 'none';
   }
-  renderDist($('chartDist'), rows.filter(r => r.c > 0 || r.p > 0), cur.spot);
-  renderTable(rows, cur.spot);
-  $('subline').textContent = `${cur.symbol} · 快照 ${curDate}（共 ${INDEX.dates.length} 天历史）`;
-  $('fetchedAt').textContent = ` 本快照抓取于 ${cur.fetched_at} ET。`;
+
+  $('distTitle').textContent = intra ? '当天累计成交量分布（按行权价）' : '当前 OI 分布（按行权价）';
+  $('legDistA').textContent = intra ? 'Call 量' : 'Call OI';
+  $('legDistB').textContent = intra ? 'Put 量' : 'Put OI';
+  $('distNote').textContent = `${expTxt} · ${curLabel}`;
+  const distRows = intra ? rows.filter(r => r.cv > 0 || r.pv > 0) : rows.filter(r => r.c > 0 || r.p > 0);
+  renderDist($('chartDist'), distRows, cur.spot, intra ? 'cv' : 'c', intra ? 'pv' : 'p',
+    intra ? 'Call 量' : 'Call OI', intra ? 'Put 量' : 'Put OI');
+
+  $('tableNote').textContent = intra
+    ? 'Δ量 为两个时间点之间的新增成交；成交量为当天累计值；OI 列盘中不变。灰底行为最接近现价的行权价。'
+    : 'Δ 为「数据日期」相对「对比基准日」的变化；灰底行为最接近现价的行权价。';
+  renderTable(rows, cur.spot, intra);
+  $('subline').textContent = `${cur.symbol} · ${curLabel}` + (intra ? '（美东时间）' : `（共 ${INDEX.dates.length} 天历史）`);
+  $('fetchedAt').textContent = ` 当前快照行情时间戳 ${cur.fetched_at} ET。`;
 }
 
 function fillSelect(sel, items, value) {
   sel.innerHTML = items.map(([v, t]) => `<option value="${v}"${v === value ? ' selected' : ''}>${t}</option>`).join('');
 }
 
+function intraDays() { return INTRA ? Object.keys(INTRA.days).filter(d => INTRA.days[d].length > 0).sort() : []; }
+
+function setupModeSelectors() {
+  const intra = $('selMode').value === 'intra';
+  $('boxDay').style.display = intra ? '' : 'none';
+  $('intraHint').style.display = intra ? '' : 'none';
+  $('lblCur').textContent = intra ? '时间点' : '数据日期';
+  $('lblBase').textContent = intra ? '对比时间点' : '对比基准日';
+  if (intra) {
+    const days = intraDays();
+    const day = days.includes($('selDay').value) ? $('selDay').value : days[days.length - 1];
+    fillSelect($('selDay'), days.map(d => [d, d]).reverse(), day);
+    syncIntraTimes(true);
+  } else {
+    const dates = INDEX.dates;
+    fillSelect($('selCur'), dates.slice().reverse().map(d => [d, d]), dates[dates.length - 1]);
+    syncDailyBase();
+  }
+}
+
+function syncIntraTimes(resetCur) {
+  const day = $('selDay').value;
+  const times = ((INTRA && INTRA.days[day]) || []).slice();
+  const cur = resetCur || !times.includes($('selCur').value) ? times[times.length - 1] : $('selCur').value;
+  fillSelect($('selCur'), times.slice().reverse().map(t => [t, hm(t)]), cur);
+  const earlier = times.filter(t => t < cur);
+  const keep = earlier.includes($('selBase').value) ? $('selBase').value : earlier[earlier.length - 1];
+  fillSelect($('selBase'), earlier.length ? earlier.reverse().map(t => [t, hm(t)]) : [['NONE', '（暂无）']], keep || 'NONE');
+}
+
+function syncDailyBase() {
+  const c = $('selCur').value;
+  const opts = INDEX.dates.filter(d => d < c);
+  const keep = opts.includes($('selBase').value) ? $('selBase').value : opts[opts.length - 1];
+  fillSelect($('selBase'), opts.length ? opts.reverse().map(d => [d, d]) : [['NONE', '（暂无）']], keep || 'NONE');
+}
+
 async function init() {
-  const r = await fetch('data/index.json');
-  INDEX = await r.json();
-  const dates = INDEX.dates;
-  const latest = dates[dates.length - 1];
-  const prev = dates.length > 1 ? dates[dates.length - 2] : null;
+  INDEX = await loadJSON('data/index.json');
+  try { INTRA = await loadJSON('data/intraday/index.json'); } catch { INTRA = null; }
+  if (!intraDays().length) {
+    const opt = $('selMode').querySelector('option[value="intra"]');
+    opt.disabled = true;
+    opt.textContent = '盘中活动（开市后可用）';
+  }
+  const latest = INDEX.dates[INDEX.dates.length - 1];
   const cur = await loadSnap(latest);
   const expiries = [...new Set(cur.options.map(o => o[0]))].sort();
   fillSelect($('selExp'), [['ALL', '全部到期日'], ...expiries.map(e => [e, e])], expiries[0]);
-  fillSelect($('selCur'), dates.slice().reverse().map(d => [d, d]), latest);
-  const baseItems = prev ? dates.slice(0, -1).reverse().map(d => [d, d]) : [['NONE', '（暂无）']];
-  fillSelect($('selBase'), baseItems, prev || 'NONE');
-  const sync = () => {
-    // base 日期必须早于数据日期
-    const c = $('selCur').value;
-    const opts = dates.filter(d => d < c);
-    const keep = opts.includes($('selBase').value) ? $('selBase').value : opts[opts.length - 1];
-    fillSelect($('selBase'), opts.length ? opts.reverse().map(d => [d, d]) : [['NONE', '（暂无）']], keep || 'NONE');
-  };
-  $('selCur').addEventListener('change', () => { sync(); render(); });
+  setupModeSelectors();
+  $('selMode').addEventListener('change', () => { setupModeSelectors(); render(); });
+  $('selDay').addEventListener('change', () => { syncIntraTimes(true); render(); });
+  $('selCur').addEventListener('change', () => {
+    if ($('selMode').value === 'intra') syncIntraTimes(false); else syncDailyBase();
+    render();
+  });
   $('selBase').addEventListener('change', render);
   $('selExp').addEventListener('change', render);
   await render();
