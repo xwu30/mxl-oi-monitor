@@ -5,6 +5,9 @@
 - **数据源**：CBOE 免费延迟行情接口（`cdn.cboe.com/api/global/delayed_quotes/options/MXL.json`）
 - **抓取**：GitHub Actions 每个交易日 11:00 UTC（7:00am ET）运行 `fetch.mjs`，
   把快照写入 `data/YYYY-MM-DD.json` 并提交回仓库
+- **盘中**：开市时段每小时运行 `INTRADAY=1 node fetch.mjs`，
+  写入 `data/intraday/YYYY-MM-DD/HHMM.json`（保留最近 14 天）。
+  注意 OI 盘中不更新（OCC 每日清晨结算一次），盘中视图对比的是各行权价的**新增成交量**
 - **展示**：`index.html`（GitHub Pages 静态页），前端加载任意两天快照做对比，
   显示每个行权价的 ΔOI、当前 OI 分布和明细表
 
