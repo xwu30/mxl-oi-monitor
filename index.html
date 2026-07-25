@@ -91,6 +91,19 @@
   }
   #tooltip .t { color: var(--muted); }
   .msg { padding: 30px; text-align: center; color: var(--muted); }
+  button {
+    background: var(--surface); color: var(--ink); border: 1px solid var(--border);
+    border-radius: 8px; padding: 6px 12px; font: inherit; cursor: pointer;
+  }
+  button:hover { background: var(--tile); }
+  input[type=text], input[type=password] {
+    background: var(--surface); color: var(--ink); border: 1px solid var(--border);
+    border-radius: 8px; padding: 6px 10px; font: inherit; width: 100%;
+  }
+  .modal-mask {
+    display: none; position: fixed; inset: 0; background: rgba(0,0,0,.45);
+    z-index: 20; align-items: center; justify-content: center;
+  }
   .hint { background: var(--tile); border-radius: 8px; padding: 8px 12px; font-size: 12px; color: var(--ink-2); margin: 10px 0; }
   footer { color: var(--muted); font-size: 12px; margin: 18px 4px; }
 </style>
@@ -104,6 +117,7 @@
 
   <div class="filters">
     <div><label for="selSym">股票</label><select id="selSym"></select></div>
+    <div><label>&nbsp;</label><button id="btnAdd">➕ 添加股票</button></div>
     <div><label for="selMode">视图</label><select id="selMode">
       <option value="daily">日度 OI 变化</option>
       <option value="intra">盘中活动（成交量）</option>
@@ -152,6 +166,30 @@
     数据来源：CBOE 延迟行情（免费公开接口，约延迟 15 分钟）。OI 由 OCC 每个交易日早间更新，反映上一交易日收盘后的持仓，
     日度快照每交易日 7:00am ET 抓取；盘中快照开市时段每小时抓取一次（保留最近 14 天）。<span id="fetchedAt"></span>
   </footer>
+</div>
+<div id="addMask" class="modal-mask">
+  <div class="card" style="width:min(92vw,440px); margin:0;">
+    <h2>添加股票代码</h2>
+    <div class="note" style="margin:4px 0 10px">输入美股代码，系统自动验证它有期权链后加入每日 + 盘中监控（约 1–2 分钟生效）。</div>
+    <input type="text" id="addSym" placeholder="如 AAPL" autocapitalize="characters" autocomplete="off">
+    <div id="tokenBox" style="display:none; margin-top:10px">
+      <div class="note" style="margin-bottom:6px">
+        首次使用需要一个 GitHub Token（<b>只需设置一次</b>，仅保存在你这台浏览器里）：<br>
+        GitHub 头像 → Settings → Developer settings → Personal access tokens →
+        <b>Fine-grained tokens</b> → Generate new token：Repository access 选
+        <b>Only select repositories → mxl-oi-monitor</b>，Permissions → Repository permissions →
+        <b>Actions = Read and write</b> → 生成后把 <code>github_pat_…</code> 粘贴到下面。
+      </div>
+      <input type="password" id="addToken" placeholder="github_pat_…" autocomplete="off">
+    </div>
+    <div id="addStatus" class="note" style="margin-top:10px"></div>
+    <div style="display:flex; gap:8px; margin-top:12px; align-items:center;">
+      <a href="#" id="lnkResetToken" class="note">重设 Token</a>
+      <span style="flex:1"></span>
+      <button id="btnAddCancel">取消</button>
+      <button id="btnAddOk" style="font-weight:600">添加</button>
+    </div>
+  </div>
 </div>
 <div id="tooltip"></div>
 
@@ -522,6 +560,62 @@ async function init() {
   await loadSymbolData();
   await render();
 }
+// ---------- add symbol (dispatches the Add symbol GitHub workflow) ----------
+const REPO = 'xwu30/mxl-oi-monitor';
+const ghToken = () => localStorage.getItem('gh_token') || '';
+$('btnAdd').addEventListener('click', () => {
+  $('addMask').style.display = 'flex';
+  $('tokenBox').style.display = ghToken() ? 'none' : '';
+  $('addStatus').textContent = '';
+  $('addSym').value = '';
+  $('addSym').focus();
+});
+$('btnAddCancel').addEventListener('click', () => { $('addMask').style.display = 'none'; });
+$('lnkResetToken').addEventListener('click', e => {
+  e.preventDefault();
+  localStorage.removeItem('gh_token');
+  $('addToken').value = '';
+  $('tokenBox').style.display = '';
+  $('addStatus').textContent = '已清除本机 Token，请粘贴新的。';
+});
+$('btnAddOk').addEventListener('click', async () => {
+  const sym = $('addSym').value.trim().toUpperCase();
+  if (!/^[A-Z][A-Z.]{0,5}$/.test(sym)) { $('addStatus').textContent = '代码格式不对（1–6 个字母）'; return; }
+  if (SYMBOLS.includes(sym)) { $('addStatus').textContent = `${sym} 已在监控列表中`; return; }
+  const t = $('addToken').value.trim() || ghToken();
+  if (!t) { $('tokenBox').style.display = ''; $('addStatus').textContent = '请先按上面的步骤生成并粘贴 GitHub Token'; return; }
+  $('addStatus').textContent = '正在提交…';
+  let r;
+  try {
+    r = await fetch(`https://api.github.com/repos/${REPO}/actions/workflows/add-symbol.yml/dispatches`, {
+      method: 'POST',
+      headers: { Authorization: 'Bearer ' + t, Accept: 'application/vnd.github+json' },
+      body: JSON.stringify({ ref: 'master', inputs: { symbol: sym } }),
+    });
+  } catch (e) { $('addStatus').textContent = '网络错误：' + e.message; return; }
+  if (r.status === 204) {
+    localStorage.setItem('gh_token', t);
+    $('addStatus').textContent = `已提交 ✓ 正在验证 ${sym} 并抓取首个快照（约 1–2 分钟），完成后自动切换过去，请勿关闭…`;
+    pollNewSymbol(sym);
+  } else if (r.status === 401) {
+    localStorage.removeItem('gh_token');
+    $('tokenBox').style.display = '';
+    $('addStatus').textContent = 'Token 无效或已过期，请重新生成后粘贴。';
+  } else {
+    $('addStatus').textContent = `提交失败 HTTP ${r.status}（Token 需要 mxl-oi-monitor 仓库的 Actions 写权限）`;
+  }
+});
+async function pollNewSymbol(sym) {
+  for (let i = 0; i < 30; i++) {
+    await new Promise(res => setTimeout(res, 10000));
+    try {
+      const j = await (await fetch(`symbols.json?v=${Date.now()}`)).json();
+      if (j.symbols.includes(sym)) { location.hash = sym; location.reload(); return; }
+    } catch {}
+  }
+  $('addStatus').textContent = `超时：${sym} 可能没有期权链被拒绝，或部署延迟。可到 GitHub 仓库 Actions 页查看「Add symbol」运行日志。`;
+}
+
 init().catch(e => { $('subline').textContent = '加载失败：' + e.message; });
 </script>
 </body>

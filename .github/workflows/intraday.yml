@@ -2,10 +2,11 @@ name: Intraday snapshot
 
 on:
   schedule:
-    # Hourly through the US session. 13:35-20:35 UTC = 9:35am-4:35pm ET in
-    # summer (EDT); one hour earlier in winter (EST), where the extra 21:10
-    # run captures the 4pm close.
-    - cron: '35 13-20 * * 1-5'
+    # Every 15 min through the US session. 13:35-20:50 UTC covers
+    # 9:35am-4:50pm ET in summer (EDT); one hour earlier in winter (EST),
+    # where the extra 21:10 run captures the 4pm close.
+    - cron: '35,50 13 * * 1-5'
+    - cron: '5,20,35,50 14-20 * * 1-5'
     - cron: '10 21 * * 1-5'
   workflow_dispatch:
 
