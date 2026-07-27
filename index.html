@@ -539,7 +539,7 @@ async function loadSymbolData() {
 }
 
 async function init() {
-  SYMBOLS = (await loadJSON('symbols.json')).symbols;
+  SYMBOLS = (await loadJSON('symbols.json?v=' + Date.now())).symbols;
   const hash = location.hash.replace('#', '').toUpperCase();
   SYM = SYMBOLS.includes(hash) ? hash : SYMBOLS[0];
   fillSelect($('selSym'), SYMBOLS.map(s => [s, s]), SYM);
