@@ -2,9 +2,13 @@ name: Daily OI snapshot
 
 on:
   schedule:
-    # 11:00 UTC = 7:00am ET, Mon-Fri. OCC posts updated open interest each
-    # business morning (reflecting the prior session), so this captures it.
-    - cron: '0 11 * * 1-5'
+    # 15:30 UTC = 11:30am ET in summer, 10:30am ET in winter, Mon-Fri.
+    # OCC posts updated open interest each business morning (reflecting the
+    # prior session), but CBOE keeps serving the contracts that expired the
+    # day before until it purges them around 9:45am ET. Fetching at 7am swept
+    # those dead strikes into the snapshot and inflated total OI by up to 4%,
+    # so wait them out.
+    - cron: '30 15 * * 1-5'
   workflow_dispatch:
 
 permissions:
