@@ -200,6 +200,15 @@ const hm = t => t.slice(0, 2) + ':' + t.slice(2);
 const cache = new Map();
 let INDEX = null, INTRA = null, SYM = null, SYMBOLS = [];
 
+// GitHub Pages serves cache-control: max-age=600, so a file that gets rewritten
+// during the day (the indexes, and today's snapshot) would keep showing its
+// ten-minute-old copy. Bust those once per page load; the in-memory cache still
+// de-dupes repeats within a session, and past days never change so they stay
+// plainly cacheable.
+const BUST = Date.now();
+const TODAY = new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
+const fresh = url => `${url}?v=${BUST}`;
+
 async function loadJSON(url) {
   if (!cache.has(url)) {
     const r = await fetch(url);
@@ -208,7 +217,10 @@ async function loadJSON(url) {
   }
   return cache.get(url);
 }
-const loadSnap = date => loadJSON(`data/${SYM}/${date}.json`);
+const loadSnap = date => {
+  const url = `data/${SYM}/${date}.json`;
+  return loadJSON(date === TODAY ? fresh(url) : url);
+};
 const loadIntra = (day, time) => loadJSON(`data/${SYM}/intraday/${day}/${time}.json`);
 
 // rows for one snapshot filtered by expiry ('ALL' aggregates across expiries by strike)
@@ -523,8 +535,8 @@ function syncDailyBase() {
 }
 
 async function loadSymbolData() {
-  INDEX = await loadJSON(`data/${SYM}/index.json`);
-  try { INTRA = await loadJSON(`data/${SYM}/intraday/index.json`); } catch { INTRA = null; }
+  INDEX = await loadJSON(fresh(`data/${SYM}/index.json`));
+  try { INTRA = await loadJSON(fresh(`data/${SYM}/intraday/index.json`)); } catch { INTRA = null; }
   const opt = $('selMode').querySelector('option[value="intra"]');
   opt.disabled = !intraDays().length;
   opt.textContent = opt.disabled ? '盘中活动（开市后可用）' : '盘中活动（成交量）';
@@ -539,7 +551,7 @@ async function loadSymbolData() {
 }
 
 async function init() {
-  SYMBOLS = (await loadJSON('symbols.json?v=' + Date.now())).symbols;
+  SYMBOLS = (await loadJSON(fresh('symbols.json'))).symbols;
   const hash = location.hash.replace('#', '').toUpperCase();
   SYM = SYMBOLS.includes(hash) ? hash : SYMBOLS[0];
   fillSelect($('selSym'), SYMBOLS.map(s => [s, s]), SYM);
