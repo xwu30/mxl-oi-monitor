@@ -24,6 +24,11 @@ jobs:
         run: node add-symbol.mjs "$SYM_INPUT"
       - name: Initial snapshot
         run: SYMBOL="$SYM_INPUT" node fetch.mjs
+      # A symbol without short-interest data still monitors fine; the page shows
+      # "等待抓取" until the next daily run picks it up.
+      - name: Initial short interest
+        continue-on-error: true
+        run: SYMBOL="$SYM_INPUT" node fetch-short.mjs
       - name: Commit
         run: |
           git config user.name "github-actions[bot]"

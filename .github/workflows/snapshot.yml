@@ -24,6 +24,11 @@ jobs:
           node-version: 20
       - name: Fetch snapshot
         run: node fetch.mjs
+      # Short interest only changes twice a month, but re-fetching daily is cheap
+      # and self-heals. Never let it take the OI snapshot down with it.
+      - name: Fetch short interest
+        continue-on-error: true
+        run: node fetch-short.mjs
       - name: Commit data
         run: |
           git config user.name "github-actions[bot]"

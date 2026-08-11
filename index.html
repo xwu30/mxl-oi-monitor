@@ -105,6 +105,15 @@
     z-index: 20; align-items: center; justify-content: center;
   }
   .hint { background: var(--tile); border-radius: 8px; padding: 8px 12px; font-size: 12px; color: var(--ink-2); margin: 10px 0; }
+  .metrics { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 10px; margin: 10px 0 4px; }
+  .metric { background: var(--tile); border-radius: 10px; padding: 12px 14px; }
+  .metric .mk { font-size: 12px; color: var(--muted); }
+  .metric .mv { display: flex; align-items: baseline; flex-wrap: wrap; gap: 7px; margin-top: 3px; font-variant-numeric: tabular-nums; }
+  .metric .prev { font-size: 17px; font-weight: 600; color: var(--muted); }
+  .metric .to { font-size: 13px; color: var(--muted); }
+  .metric .now { font-size: 24px; font-weight: 700; }
+  .metric .md { font-size: 12px; color: var(--ink-2); margin-top: 3px; }
+  .metric.na .now { font-size: 22px; color: var(--muted); }
   footer { color: var(--muted); font-size: 12px; margin: 18px 4px; }
 </style>
 </head>
@@ -131,6 +140,14 @@
   <div class="hint" id="intraHint" style="display:none">
     ℹ️ 未平仓量（OI）由 OCC 每天清晨只结算一次，<b>盘中不会变化</b>——盘中真正实时变化的是<b>当天累计成交量</b>。
     下方显示两个时间点之间每个行权价<b>新增的成交量</b>：这些新成交会在<b>下一个交易日早上</b>结算成 OI 的增减（切回「日度 OI 变化」视图查看）。
+  </div>
+
+  <div class="card" id="shortCard">
+    <h2>做空数据（Short Interest / Utilization / Borrow Rate）</h2>
+    <div class="note" id="shortNote"></div>
+    <div class="metrics" id="shortMetrics"></div>
+    <div class="panel-title" id="shortHistTitle">空头仓位比例历史（占流通股）</div>
+    <div class="chartscroll" id="chartShort"></div>
   </div>
 
   <div class="card">
@@ -437,6 +454,111 @@ function renderTiles(cur, rows, baseLabel, intra) {
     tile('Put / Call 比', tc > 0 ? (tp / tc).toFixed(2) : '—', intra ? '成交量口径' : 'OI 口径');
 }
 
+// ---------- short interest / securities lending ----------
+// data/<SYM>/short.json is rewritten by fetch-short.mjs on the daily run.
+// utilization / borrow_rate are null until a paid lending feed is wired into
+// fetchLending() there; the tiles say so rather than silently disappearing.
+let SHORT = null;
+const LEND_NA = '暂无免费公开数据源 — 借券市场数据来自 EquiLend / FIS Astec，Ortex、Fintel 等转售方均需付费订阅';
+const pctTxt = v => (v == null ? '—' : `${v.toFixed(2)}%`);
+
+function metricCard(k, inner, note, na) {
+  return `<div class="metric${na ? ' na' : ''}"><div class="mk">${k}</div>
+    <div class="mv">${inner}</div><div class="md">${note}</div></div>`;
+}
+
+// "6.25% → 5.61%" with the current value coloured by direction (same up/down
+// convention as ΔOI elsewhere on the page: 增加 blue, 减少 red).
+function movePair(prev, cur, fmtV) {
+  const dir = prev == null || cur == null ? null : cur - prev;
+  const cls = !dir ? '' : (dir > 0 ? 'updn-up' : 'updn-down');
+  return (prev == null ? '' : `<span class="prev">${fmtV(prev)}</span><span class="to">→</span>`)
+    + `<span class="now ${cls}">${fmtV(cur)}</span>`;
+}
+
+function renderShortMetrics() {
+  const si = SHORT && SHORT.short_interest;
+  const hist = (SHORT && SHORT.history) || [];
+  const prevRow = hist.length > 1 ? hist[hist.length - 2] : null;
+  let cards;
+  if (si) {
+    const dpp = si.prev_pct_float != null && si.pct_float != null ? si.pct_float - si.prev_pct_float : null;
+    const dSh = si.prev_shares_short != null ? si.shares_short - si.prev_shares_short : null;
+    const move = dpp == null ? '' : (dpp > 0 ? '空头仓位上升' : dpp < 0 ? '空头仓位下降' : '空头仓位持平');
+    const siNote = si.prev_date
+      ? `${si.prev_date} → ${si.date} · ${move} ${Math.abs(dpp ?? 0).toFixed(2)}pp`
+        + (dSh == null ? '' : `（${dSh > 0 ? '+' : ''}${fmt(dSh)} 股）`)
+      : `结算日 ${si.date}`;
+    cards = metricCard('Short Interest（空头仓位比例 / 占流通股）',
+        movePair(si.prev_pct_float, si.pct_float, pctTxt), siNote, si.pct_float == null)
+      + metricCard('Days to Cover（空头回补天数）',
+        movePair(prevRow ? prevRow.days_to_cover : null, si.days_to_cover, v => (v == null ? '—' : v.toFixed(2))),
+        `空头股数 ${fmt(si.shares_short)} · 日均成交 ${fmt(si.avg_daily_vol || 0)}`, si.days_to_cover == null);
+  } else {
+    cards = metricCard('Short Interest（空头仓位比例 / 占流通股）', '<span class="now">—</span>',
+        SHORT ? '该标的暂无 FINRA 空头持仓记录' : '等待下一次每日抓取生成', true)
+      + metricCard('Days to Cover（空头回补天数）', '<span class="now">—</span>', '同上', true);
+  }
+  const util = SHORT && SHORT.utilization, borrow = SHORT && SHORT.borrow_rate;
+  cards += metricCard('Utilization（借券利用率）',
+      `<span class="now">${util == null ? '—' : pctTxt(util)}</span>`,
+      util == null ? LEND_NA : `更新于 ${SHORT.lending_as_of || SHORT.updated_at}`, util == null);
+  cards += metricCard('Borrow Rate（借券利率 / 年化）',
+      `<span class="now">${borrow == null ? '—' : pctTxt(borrow)}</span>`,
+      borrow == null ? LEND_NA : `更新于 ${SHORT.lending_as_of || SHORT.updated_at}`, borrow == null);
+  $('shortMetrics').innerHTML = cards;
+}
+
+function renderShortHistory(box, hist) {
+  const pts = hist.filter(h => h.pct_float != null);
+  if (pts.length < 2) { box.innerHTML = '<div class="msg">历史期数不足，无法绘制趋势</div>'; return; }
+  const H = 180, padL = 46, padR = 18, top = 16, bottom = 26, slot = 40;
+  const plotH = H - top - bottom;
+  const W = Math.max(320, padL + (pts.length - 1) * slot + padR);
+  const maxV = Math.max(...pts.map(p => p.pct_float));
+  const scaleMax = maxV > 0 ? maxV * 1.15 : 1;
+  const X = i => padL + i * slot;
+  const Y = v => top + plotH - (v / scaleMax) * plotH;
+  const col = CSS('--call');
+  const line = pts.map((p, i) => `${i ? 'L' : 'M'}${X(i)},${Y(p.pct_float).toFixed(1)}`).join('');
+  const area = `${line}L${X(pts.length - 1)},${top + plotH}L${padL},${top + plotH}Z`;
+  const every = Math.ceil(pts.length / 8);
+  let marks = '', labels = '';
+  pts.forEach((p, i) => {
+    const tipTxt = `<b>${p.date}</b><br>占流通股: <b>${p.pct_float.toFixed(2)}%</b><br>空头股数: ${fmt(p.shares_short)}`
+      + (p.days_to_cover != null ? `<br>回补天数: ${p.days_to_cover.toFixed(2)}` : '');
+    marks += `<circle cx="${X(i)}" cy="${Y(p.pct_float)}" r="${i === pts.length - 1 ? 4 : 2.5}" fill="${col}" pointer-events="none"/>`;
+    marks += `<rect x="${X(i) - slot / 2}" y="${top}" width="${slot}" height="${plotH}" fill="transparent" data-tip="${tipTxt.replace(/"/g, '&quot;')}"/>`;
+    if (i % every === 0 || i === pts.length - 1) {
+      labels += `<text x="${X(i)}" y="${H - 8}" text-anchor="middle" font-size="10" fill="${CSS('--muted')}">${p.date.slice(5)}</text>`;
+    }
+  });
+  const last = pts[pts.length - 1];
+  box.innerHTML = `<svg width="${W}" height="${H}" role="img" aria-label="空头仓位占流通股比例的历史趋势折线图">
+    <line x1="${padL - 6}" y1="${top + plotH}" x2="${W - padR + 6}" y2="${top + plotH}" stroke="${CSS('--baseline')}" stroke-width="1"/>
+    <line x1="${padL - 6}" y1="${Y(maxV)}" x2="${W - padR + 6}" y2="${Y(maxV)}" stroke="${CSS('--grid')}" stroke-width="1"/>
+    <text x="${padL - 10}" y="${Y(maxV) + 4}" text-anchor="end" font-size="10" fill="${CSS('--muted')}">${maxV.toFixed(1)}%</text>
+    <text x="${padL - 10}" y="${top + plotH + 4}" text-anchor="end" font-size="10" fill="${CSS('--muted')}">0</text>
+    <path d="${area}" fill="${col}" opacity="0.10"/>
+    <path d="${line}" fill="none" stroke="${col}" stroke-width="2" stroke-linejoin="round"/>
+    ${marks}${labels}
+    <text x="${X(pts.length - 1)}" y="${Y(last.pct_float) - 9}" text-anchor="end" font-size="10" font-weight="600" fill="${CSS('--ink-2')}">${last.pct_float.toFixed(2)}%</text>
+  </svg>`;
+  bindTips(box);
+}
+
+function renderShort() {
+  renderShortMetrics();
+  const hist = (SHORT && SHORT.history) || [];
+  $('shortHistTitle').style.display = hist.length ? '' : 'none';
+  if (hist.length) renderShortHistory($('chartShort'), hist); else $('chartShort').innerHTML = '';
+  $('shortNote').innerHTML = SHORT
+    ? `FINRA 合并空头持仓，每月两次结算（月中 / 月末），公布滞后约 8 个交易日`
+      + (SHORT.float_shares ? ` · 比例按当前流通股 ${fmt(SHORT.float_shares)} 股折算，历史期数为近似值` : '')
+      + ` · 抓取于 ${SHORT.updated_at} ET`
+    : '该标的尚未生成做空数据 — 每交易日的每日快照任务运行后自动出现。';
+}
+
 // ---------- main ----------
 async function render() {
   const mode = $('selMode').value, expiry = $('selExp').value;
@@ -547,6 +669,10 @@ async function loadSymbolData() {
   fillSelect($('selExp'), [['ALL', '全部到期日'], ...expiries.map(e => [e, e])], expiries[0]);
   $('pageTitle').textContent = `${SYM} 期权未平仓量（OI）监控`;
   document.title = `${SYM} 期权 OI 监控`;
+  // Short interest is a per-symbol side panel; a missing file must not stop the
+  // OI view from rendering (a freshly added symbol has none until the next run).
+  try { SHORT = await loadJSON(fresh(`data/${SYM}/short.json`)); } catch { SHORT = null; }
+  renderShort();
   setupModeSelectors();
 }
 
