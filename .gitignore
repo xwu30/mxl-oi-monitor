@@ -1,0 +1,9 @@
+# TradingAgents deployment (analysis/) — everything here is local-only.
+# The venv is ~500MB, .env holds API keys, and reports/ is the raw markdown tree;
+# the web-facing copy of each analysis lives in data/<SYM>/analysis/ and IS committed.
+analysis/.venv/
+analysis/.env
+analysis/reports/
+__pycache__/
+*.pyc
+.DS_Store

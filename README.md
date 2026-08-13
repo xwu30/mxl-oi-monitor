@@ -12,8 +12,11 @@
   空头仓位比例（Short Interest，占流通股）、空头回补天数（Days to Cover）及近一年历史趋势。
   数据源 [FINRA 合并空头持仓 API](https://api.finra.org)（每月两次结算，滞后约 8 个交易日，
   覆盖全部美股上市；Nasdaq 接口作降级备份）＋ Yahoo 取流通股数换算比例
+- **AI 分析**：`analysis/` 下部署了 [TradingAgents](https://github.com/TauricResearch/TradingAgents)
+  多智能体框架，手动按需对任一标的产出研究报告（分析师团队 → 多空辩论 → 交易员 → 风控委员会 →
+  BUY/HOLD/SELL），并把本地 OI 与空头数据注入其上下文。用法见 [`analysis/README.md`](analysis/README.md)
 - **展示**：`index.html`（GitHub Pages 静态页），前端加载任意两天快照做对比，
-  显示每个行权价的 ΔOI、当前 OI 分布和明细表，以及该股票的做空数据卡片
+  显示每个行权价的 ΔOI、当前 OI 分布和明细表，以及该股票的做空数据与 AI 分析卡片
 
 ## 手动操作
 

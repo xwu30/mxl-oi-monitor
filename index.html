@@ -114,6 +114,26 @@
   .metric .now { font-size: 24px; font-weight: 700; }
   .metric .md { font-size: 12px; color: var(--ink-2); margin-top: 3px; }
   .metric.na .now { font-size: 22px; color: var(--muted); }
+  .ai-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin: 10px 0 4px; }
+  .ai-badge { font-size: 15px; font-weight: 700; padding: 3px 14px; border-radius: 999px; border: 1px solid var(--border); }
+  .ai-buy { color: #0f7a4d; background: rgba(27,175,122,.14); }
+  .ai-sell { color: var(--down-text); background: rgba(227,73,72,.14); }
+  .ai-hold { color: var(--ink-2); background: var(--tile); }
+  details.ai-sec { border-top: 1px solid var(--grid); padding: 8px 0; }
+  details.ai-sec summary { cursor: pointer; font-weight: 600; font-size: 13px; list-style: none; }
+  details.ai-sec summary::-webkit-details-marker { display: none; }
+  details.ai-sec summary::before { content: '▸ '; color: var(--muted); }
+  details.ai-sec[open] summary::before { content: '▾ '; }
+  .md { font-size: 13px; color: var(--ink-2); margin-top: 8px; overflow-x: auto; }
+  .md h4 { font-size: 13px; color: var(--ink); margin: 10px 0 4px; }
+  .md p { margin: 6px 0; }
+  .md ul, .md ol { margin: 6px 0 6px 18px; }
+  .md li { margin: 2px 0; }
+  .md code { background: var(--tile); padding: 1px 4px; border-radius: 4px; font-size: 12px; }
+  .md strong { color: var(--ink); }
+  .md table { border-collapse: collapse; margin: 8px 0; font-size: 12px; }
+  .md th, .md td { border: 1px solid var(--grid); padding: 4px 8px; text-align: left; white-space: nowrap; }
+  .md th { color: var(--muted); font-weight: 600; }
   footer { color: var(--muted); font-size: 12px; margin: 18px 4px; }
 </style>
 </head>
@@ -140,6 +160,16 @@
   <div class="hint" id="intraHint" style="display:none">
     ℹ️ 未平仓量（OI）由 OCC 每天清晨只结算一次，<b>盘中不会变化</b>——盘中真正实时变化的是<b>当天累计成交量</b>。
     下方显示两个时间点之间每个行权价<b>新增的成交量</b>：这些新成交会在<b>下一个交易日早上</b>结算成 OI 的增减（切回「日度 OI 变化」视图查看）。
+  </div>
+
+  <div class="card" id="aiCard">
+    <h2>AI 多智能体分析（TradingAgents）</h2>
+    <div class="note" id="aiNote"></div>
+    <div id="aiBox" style="display:none; margin-top:8px">
+      <label for="selAI" style="color:var(--muted); font-size:12px">分析日期</label>
+      <select id="selAI"></select>
+    </div>
+    <div id="aiBody"></div>
   </div>
 
   <div class="card" id="shortCard">
@@ -454,6 +484,98 @@ function renderTiles(cur, rows, baseLabel, intra) {
     tile('Put / Call 比', tc > 0 ? (tp / tc).toFixed(2) : '—', intra ? '成交量口径' : 'OI 口径');
 }
 
+// ---------- TradingAgents analysis ----------
+// data/<SYM>/analysis/<date>.json is written by analysis/analyze.py, which runs
+// on demand (it costs LLM tokens), not on the daily cron.
+let ANALYSIS = null, AI_DATES = [];
+
+// Just enough markdown for what the agents emit: headings, lists, tables, bold,
+// inline code. Everything is escaped first — no raw HTML reaches the page.
+function mdToHtml(src) {
+  const esc = s => s.replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
+  const inline = s => esc(s)
+    .replace(/`([^`]+)`/g, '<code>$1</code>')
+    .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+  const rowCells = r => r.trim().replace(/^\||\|$/g, '').split('|').map(c => c.trim());
+  const lines = src.split('\n');
+  let html = '', list = null, i = 0;
+  const closeList = () => { if (list) { html += `</${list}>`; list = null; } };
+  while (i < lines.length) {
+    const ln = lines[i];
+    if (/^\s*\|/.test(ln) && /^\s*\|[-\s|:]+\|\s*$/.test(lines[i + 1] || '')) {
+      closeList();
+      html += '<table><thead><tr>' + rowCells(ln).map(c => `<th>${inline(c)}</th>`).join('') + '</tr></thead><tbody>';
+      i += 2;
+      while (i < lines.length && /^\s*\|/.test(lines[i])) {
+        html += '<tr>' + rowCells(lines[i]).map(c => `<td>${inline(c)}</td>`).join('') + '</tr>';
+        i++;
+      }
+      html += '</tbody></table>';
+      continue;
+    }
+    const h = /^(#{1,6})\s+(.*)$/.exec(ln);
+    if (h) { closeList(); html += `<h4>${inline(h[2])}</h4>`; i++; continue; }
+    const item = /^\s*[-*+]\s+(.*)$/.exec(ln) || /^\s*\d+[.)]\s+(.*)$/.exec(ln);
+    if (item) {
+      const want = /^\s*\d/.test(ln) ? 'ol' : 'ul';
+      if (list !== want) { closeList(); html += `<${want}>`; list = want; }
+      html += `<li>${inline(item[1])}</li>`; i++; continue;
+    }
+    closeList();
+    if (ln.trim()) html += `<p>${inline(ln)}</p>`;
+    i++;
+  }
+  closeList();
+  return html;
+}
+
+function renderAnalysis() {
+  const body = $('aiBody');
+  if (!ANALYSIS) {
+    body.innerHTML = '';
+    $('aiNote').innerHTML = AI_DATES.length
+      ? '分析报告加载失败。'
+      : `尚未对 ${SYM} 生成分析。在本机运行 <code>./analysis/run.sh ${SYM}</code> 后提交即可显示`
+        + '（需要 analysis/.env 里的 LLM API key，每次分析按 token 计费）。';
+    return;
+  }
+  const a = ANALYSIS;
+  const verdict = String(a.decision || '').toUpperCase();
+  const cls = verdict.includes('BUY') ? 'ai-buy' : verdict.includes('SELL') ? 'ai-sell' : 'ai-hold';
+  const label = verdict.includes('BUY') ? '建议买入' : verdict.includes('SELL') ? '建议卖出'
+    : verdict.includes('HOLD') ? '建议持有' : verdict || '无结论';
+  const m = a.models || {};
+  $('aiNote').innerHTML = `交易日 ${a.trade_date} · 生成于 ${a.generated_at}`
+    + ` · 模型 ${m.provider || '?'}/${m.deep || '?'} · 深度 ${a.depth || '?'}`
+    + ` · 分析师 ${(a.analysts || []).join('、') || '—'}`;
+  let html = `<div class="ai-head"><span class="ai-badge ${cls}">${label}</span>`
+    + `<span style="color:var(--muted);font-size:12px">${verdict}</span></div>`;
+  (a.sections || []).forEach((s, i) => {
+    // Open the final decision by default; the rest stay folded so the card
+    // does not push the OI charts off the screen.
+    const open = s.key === 'decision' || (i === (a.sections.length - 1)) ? ' open' : '';
+    html += `<details class="ai-sec"${open}><summary>${s.title}</summary><div class="md">${mdToHtml(s.text)}</div></details>`;
+  });
+  if (a.local_context) {
+    html += `<details class="ai-sec"><summary>注入给智能体的本地数据（OI / 空头）</summary>`
+      + `<div class="md">${mdToHtml(a.local_context)}</div></details>`;
+  }
+  html += `<div class="note" style="margin-top:10px">⚠️ 以上为 LLM 智能体生成的研究材料，非投资建议；`
+    + `模型可能出错或使用过时数据，据此交易风险自负。</div>`;
+  body.innerHTML = html;
+}
+
+async function loadAnalysis() {
+  ANALYSIS = null; AI_DATES = [];
+  try { AI_DATES = (await loadJSON(fresh(`data/${SYM}/analysis/index.json`))).dates || []; } catch { AI_DATES = []; }
+  $('aiBox').style.display = AI_DATES.length > 1 ? '' : 'none';
+  if (AI_DATES.length) {
+    fillSelect($('selAI'), AI_DATES.slice().reverse().map(d => [d, d]), AI_DATES[AI_DATES.length - 1]);
+    try { ANALYSIS = await loadJSON(fresh(`data/${SYM}/analysis/${$('selAI').value}.json`)); } catch { ANALYSIS = null; }
+  }
+  renderAnalysis();
+}
+
 // ---------- short interest / securities lending ----------
 // data/<SYM>/short.json is rewritten by fetch-short.mjs on the daily run.
 // utilization / borrow_rate are null until a paid lending feed is wired into
@@ -673,6 +795,7 @@ async function loadSymbolData() {
   // OI view from rendering (a freshly added symbol has none until the next run).
   try { SHORT = await loadJSON(fresh(`data/${SYM}/short.json`)); } catch { SHORT = null; }
   renderShort();
+  await loadAnalysis();
   setupModeSelectors();
 }
 
@@ -695,6 +818,10 @@ async function init() {
   });
   $('selBase').addEventListener('change', render);
   $('selExp').addEventListener('change', render);
+  $('selAI').addEventListener('change', async () => {
+    try { ANALYSIS = await loadJSON(fresh(`data/${SYM}/analysis/${$('selAI').value}.json`)); } catch { ANALYSIS = null; }
+    renderAnalysis();
+  });
   await loadSymbolData();
   await render();
 }
