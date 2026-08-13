@@ -46,6 +46,88 @@ DEPTHS = {
     "deep": (["market", "social", "news", "fundamentals"], 3, 2),
 }
 
+# USD per 1M tokens (input, output), from each vendor's public rate card as of
+# 2026-08. Used only to price a finished run — update here when rates move.
+# The graph runs 12 of its 14 nodes on quick_think_llm and only 2 (research
+# manager, portfolio manager) on deep_think_llm, so the quick model dominates
+# the bill while the deep model is nearly free to upgrade.
+PRICES = {
+    "claude-opus-5": (5.0, 25.0),
+    "claude-sonnet-5": (3.0, 15.0),
+    "claude-haiku-4-5": (1.0, 5.0),
+    "gpt-5.5": (5.0, 30.0),
+    "gpt-5.4-mini": (0.375, 2.25),
+    "gpt-5.4": (2.5, 15.0),
+    "gemini-3-pro": (2.0, 12.0),
+    "gemini-3-flash": (1.5, 7.5),
+    "deepseek-v4-pro": (0.435, 0.87),
+    "deepseek-v4-flash": (0.14, 0.28),
+}
+
+
+def price_of(model: str):
+    """Longest-prefix match so dated or suffixed model ids still price."""
+    hit = [k for k in PRICES if model.startswith(k)]
+    return PRICES[max(hit, key=len)] if hit else None
+
+
+class UsageTracker:
+    """Count tokens per model across a run, so cost is measured, not guessed.
+
+    Duck-typed rather than subclassing BaseCallbackHandler: LangChain only calls
+    the hooks it finds, and this keeps the import out of module scope.
+    """
+
+    raise_error = False
+    ignore_llm = ignore_chain = ignore_agent = ignore_retriever = ignore_chat_model = False
+
+    def __init__(self):
+        self.by_model: dict[str, dict[str, int]] = {}
+        self.calls = 0
+
+    def __getattr__(self, name):  # ignore every hook we don't implement
+        if name.startswith("on_"):
+            return lambda *a, **k: None
+        raise AttributeError(name)
+
+    def on_llm_end(self, response, **_):
+        self.calls += 1
+        for generations in getattr(response, "generations", []):
+            for gen in generations:
+                message = getattr(gen, "message", None)
+                usage = getattr(message, "usage_metadata", None) or {}
+                meta = getattr(message, "response_metadata", None) or {}
+                model = meta.get("model_name") or meta.get("model") or "unknown"
+                if not usage:
+                    # Providers that only fill llm_output (older OpenAI shapes).
+                    out = getattr(response, "llm_output", None) or {}
+                    raw = out.get("token_usage") or {}
+                    usage = {
+                        "input_tokens": raw.get("prompt_tokens", 0),
+                        "output_tokens": raw.get("completion_tokens", 0),
+                    }
+                    model = out.get("model_name", model)
+                bucket = self.by_model.setdefault(model, {"input_tokens": 0, "output_tokens": 0})
+                bucket["input_tokens"] += usage.get("input_tokens", 0) or 0
+                bucket["output_tokens"] += usage.get("output_tokens", 0) or 0
+
+    def summary(self) -> dict:
+        cost, priced = 0.0, bool(self.by_model)
+        for model, b in self.by_model.items():
+            rate = price_of(model)
+            if rate is None:
+                priced = False  # don't report a number that omits a model
+                continue
+            cost += b["input_tokens"] / 1e6 * rate[0] + b["output_tokens"] / 1e6 * rate[1]
+        return {
+            "llm_calls": self.calls,
+            "input_tokens": sum(b["input_tokens"] for b in self.by_model.values()),
+            "output_tokens": sum(b["output_tokens"] for b in self.by_model.values()),
+            "cost_usd": round(cost, 4) if priced else None,
+            "by_model": self.by_model,
+        }
+
+
 SECTION_TITLES = [
     ("market_report", "market", "市场与技术面分析"),
     ("sentiment_report", "sentiment", "社交情绪分析"),
@@ -171,7 +253,9 @@ def run_symbol(symbol: str, trade_date: str, depth: str, use_local: bool) -> dic
     if os.getenv("ALPHA_VANTAGE_API_KEY"):
         config["data_vendors"] = {**config["data_vendors"], "news_data": "alpha_vantage"}
 
-    ta = TradingAgentsGraph(selected_analysts=analysts, debug=False, config=config)
+    tracker = UsageTracker()
+    ta = TradingAgentsGraph(selected_analysts=analysts, debug=False, config=config,
+                            callbacks=[tracker])
 
     local = build_local_context(symbol) if use_local else ""
     if local:
@@ -220,6 +304,7 @@ def run_symbol(symbol: str, trade_date: str, depth: str, use_local: bool) -> dic
         "analysts": analysts,
         "models": {"provider": provider, "deep": config["deep_think_llm"], "quick": config["quick_think_llm"]},
         "local_context": local,
+        "usage": tracker.summary(),
         "report_dir": str(report_dir.relative_to(REPO)),
         "sections": sections,
     }
@@ -263,7 +348,11 @@ def main() -> int:
             failures.append(symbol)
             continue
         path = write_web_report(result)
+        u = result["usage"]
+        cost = f"，约 ${u['cost_usd']}" if u["cost_usd"] is not None else "（该模型未在 PRICES 表中，无法计价）"
         print(f"[{symbol}] 决策 {result['decision']} → {path.relative_to(REPO)}")
+        print(f"[{symbol}] 实测用量：{u['llm_calls']} 次调用，"
+              f"输入 {u['input_tokens']:,} / 输出 {u['output_tokens']:,} tokens{cost}")
         print(f"[{symbol}] 完整报告 → {result['report_dir']}")
 
     if failures:
