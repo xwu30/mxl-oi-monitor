@@ -145,8 +145,13 @@ async function send(text) {
     });
   }
   if (process.env.TELEGRAM_BOT_TOKEN && process.env.TELEGRAM_CHAT_ID) {
-    return post(`https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN}/sendMessage`,
-      { chat_id: process.env.TELEGRAM_CHAT_ID, text, parse_mode: 'Markdown' });
+    // Telegram's legacy Markdown marks bold with a single asterisk; sending the
+    // standard **bold** the other channels use fails to parse outright.
+    return post(`https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN}/sendMessage`, {
+      chat_id: process.env.TELEGRAM_CHAT_ID,
+      text: text.replace(/\*\*(.+?)\*\*/g, '*$1*'),
+      parse_mode: 'Markdown',
+    });
   }
   if (process.env.WEBHOOK_URL) return post(process.env.WEBHOOK_URL, { text });
   return null; // no channel picked yet — not an error, see below
