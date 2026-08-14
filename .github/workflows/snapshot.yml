@@ -29,6 +29,18 @@ jobs:
       - name: Fetch short interest
         continue-on-error: true
         run: node fetch-short.mjs
+      # Runs on the freshly written snapshots but before the commit, so a failed
+      # push never costs us the data. Skips itself when no channel secret is
+      # set, so the job stays green until one is chosen.
+      - name: Push anomaly alerts
+        env:
+          WECOM_WEBHOOK: ${{ secrets.WECOM_WEBHOOK }}
+          SERVERCHAN_KEY: ${{ secrets.SERVERCHAN_KEY }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          WEBHOOK_URL: ${{ secrets.WEBHOOK_URL }}
+        run: node alert.mjs
+
       - name: Commit data
         run: |
           git config user.name "github-actions[bot]"
