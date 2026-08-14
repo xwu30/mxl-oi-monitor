@@ -23,6 +23,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from dotenv import load_dotenv
+from langchain_core.callbacks import BaseCallbackHandler
 
 HERE = Path(__file__).resolve().parent
 REPO = HERE.parent
@@ -71,24 +72,17 @@ def price_of(model: str):
     return PRICES[max(hit, key=len)] if hit else None
 
 
-class UsageTracker:
+class UsageTracker(BaseCallbackHandler):
     """Count tokens per model across a run, so cost is measured, not guessed.
 
-    Duck-typed rather than subclassing BaseCallbackHandler: LangChain only calls
-    the hooks it finds, and this keeps the import out of module scope.
+    Must genuinely subclass BaseCallbackHandler — the chat model validates its
+    `callbacks` field with pydantic, so a duck-typed handler is rejected before
+    a single request goes out.
     """
-
-    raise_error = False
-    ignore_llm = ignore_chain = ignore_agent = ignore_retriever = ignore_chat_model = False
 
     def __init__(self):
         self.by_model: dict[str, dict[str, int]] = {}
         self.calls = 0
-
-    def __getattr__(self, name):  # ignore every hook we don't implement
-        if name.startswith("on_"):
-            return lambda *a, **k: None
-        raise AttributeError(name)
 
     def on_llm_end(self, response, **_):
         self.calls += 1
