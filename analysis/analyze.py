@@ -161,6 +161,18 @@ def build_local_context(symbol: str) -> str:
     Returns "" when the symbol has no local data yet, so the run degrades to
     plain TradingAgents rather than injecting an empty section.
     """
+    # A-shares have neither CBOE options nor FINRA short interest — CBOE answers
+    # 403 and FINRA returns nothing. Margin-trading balances are the local
+    # equivalent: 融资余额 is leveraged long exposure, 融券余量 borrowed shares.
+    import akshare_provider
+    if akshare_provider.is_ashare(symbol):
+        margin = akshare_provider.margin_summary(symbol)
+        if not margin:
+            return ""
+        return ("\n\n## 本地补充数据（由 mxl-oi-monitor 提供，非 TradingAgents 抓取）\n"
+                "以下融资融券数据反映杠杆多头与融券做空的资金定位，请在判断时一并考虑。\n"
+                + margin + "\n")
+
     root = REPO / "data" / symbol
     lines: list[str] = []
 
@@ -246,6 +258,14 @@ def run_symbol(symbol: str, trade_date: str, depth: str, use_local: bool) -> dic
     # sentiment analysts run thin.
     if os.getenv("ALPHA_VANTAGE_API_KEY"):
         config["data_vendors"] = {**config["data_vendors"], "news_data": "alpha_vantage"}
+
+    # A-shares route everything through AkShare instead: yfinance carries prices
+    # but little else for them, and Alpha Vantage rejects the ticker outright.
+    import akshare_provider
+    if akshare_provider.is_ashare(symbol):
+        akshare_provider.register()
+        config["data_vendors"] = akshare_provider.VENDORS
+        print(f"[{symbol}] A 股标的 → 数据源切换为 AkShare（行情/财务/新闻/融资融券）")
 
     tracker = UsageTracker()
     ta = TradingAgentsGraph(selected_analysts=analysts, debug=False, config=config,
