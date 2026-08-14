@@ -101,6 +101,26 @@ ALPHA_VANTAGE_API_KEY=...           # 强烈建议，见下文「数据源现状
 写成普通文本导致空转；最终决策要能稳定输出 BUY/HOLD/SELL 供 `parse_rating` 提取。
 所以即使走省钱路线，也建议 deep 用该家最强的那个（DeepSeek 就配 V4 Pro）。
 
+### 用 DeepSeek 跑
+
+1. 到 [platform.deepseek.com](https://platform.deepseek.com) 注册 → API keys → 新建一个 key（`sk-` 开头），充值几美元
+2. 编辑 `analysis/.env`：
+
+   ```
+   OPENAI_API_KEY=sk-你的DeepSeekKey        # 变量名就叫 OPENAI_API_KEY，因为走的是 OpenAI 兼容协议
+   TRADINGAGENTS_LLM_PROVIDER=openai
+   TRADINGAGENTS_LLM_BACKEND_URL=https://api.deepseek.com
+   TRADINGAGENTS_QUICK_THINK_LLM=deepseek-v4-pro
+   TRADINGAGENTS_DEEP_THINK_LLM=deepseek-v4-pro
+   ```
+
+3. `./analysis/run.sh NVDA` —— 跑完看末尾打印的实测 token 与花费
+
+启动时会打印一行 `RuntimeWarning: Model 'deepseek-v4-pro' is not in the known model list`，
+这是框架只认自家模型白名单，**不影响运行**，忽略即可。
+
+**DeepSeek 已预告涨价**（2026-08-06 公告，未给新价与生效日期），别把预算按现价钉死。
+
 **⚠️ deep 和 quick 必须同一家**——框架只有一个 `llm_provider`，两者共用它和 `backend_url`。
 想跨家混搭（例如 quick 用 DeepSeek、deep 用 Opus）只能挂一个 OpenAI 兼容的聚合网关。
 
