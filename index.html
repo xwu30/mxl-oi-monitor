@@ -683,6 +683,7 @@ function renderShort() {
 
 // ---------- main ----------
 async function render() {
+  if (!INDEX) return; // analysis-only symbol; nothing options-shaped to draw
   const mode = $('selMode').value, expiry = $('selExp').value;
   const intra = mode === 'intra';
   let cur, base, curLabel, baseLabel;
@@ -778,8 +779,45 @@ function syncDailyBase() {
   fillSelect($('selBase'), opts.length ? opts.reverse().map(d => [d, d]) : [['NONE', '（暂无）']], keep || 'NONE');
 }
 
+// A-shares have no CBOE options chain (the endpoint answers 403), so a symbol
+// can legitimately carry an AI analysis with no OI data behind it. Hide the
+// options half of the page rather than failing the whole load.
+function setOptionsUI(visible) {
+  const show = visible ? '' : 'none';
+  for (const id of ['tiles', 'shortCard', 'intraHint']) {
+    const el = $(id);
+    if (el) el.style.display = show;
+  }
+  // The three option cards have no ids; they are the .card elements that hold
+  // the delta / distribution / table sections.
+  for (const id of ['deltaTitle', 'distTitle', 'tableBox']) {
+    const card = $(id)?.closest('.card');
+    if (card) card.style.display = show;
+  }
+  for (const id of ['selMode', 'selExp', 'selCur', 'selBase']) {
+    const box = $(id)?.parentElement;
+    if (box) box.style.display = show;
+  }
+  const day = $('boxDay');
+  if (day && !visible) day.style.display = 'none';
+}
+
 async function loadSymbolData() {
-  INDEX = await loadJSON(fresh(`data/${SYM}/index.json`));
+  try {
+    INDEX = await loadJSON(fresh(`data/${SYM}/index.json`));
+  } catch {
+    INDEX = null;
+  }
+  if (!INDEX) {
+    setOptionsUI(false);
+    $('pageTitle').textContent = `${SYM} 分析`;
+    document.title = `${SYM} 分析`;
+    $('subline').textContent = `${SYM} · 非美股标的，无期权持仓数据，仅显示 AI 分析`;
+    SHORT = null;
+    await loadAnalysis();
+    return;
+  }
+  setOptionsUI(true);
   try { INTRA = await loadJSON(fresh(`data/${SYM}/intraday/index.json`)); } catch { INTRA = null; }
   const opt = $('selMode').querySelector('option[value="intra"]');
   opt.disabled = !intraDays().length;

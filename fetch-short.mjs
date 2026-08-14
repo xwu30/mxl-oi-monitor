@@ -199,8 +199,13 @@ const symbols = process.env.SYMBOL
   ? [process.env.SYMBOL.toUpperCase()]
   : JSON.parse(readFileSync('symbols.json', 'utf8')).symbols;
 
+// FINRA publishes US short interest only; A-shares get 融资融券 from AkShare at
+// analysis time instead (see analysis/akshare_provider.py).
+const isAShare = s => /\.(SS|SZ)$/i.test(s);
+
 let failed = 0;
 for (const s of symbols) {
+  if (isAShare(s)) { console.log(`${s}: 跳过（FINRA 无 A 股空头数据）`); continue; }
   try {
     await snapshotShort(s);
   } catch (e) {

@@ -137,7 +137,7 @@ def _financial_abstract(symbol: str) -> pd.DataFrame | None:
         return None
 
 
-def get_fundamentals(symbol: str, curr_date: str) -> str:
+def get_fundamentals(symbol: str, curr_date: str | None = None) -> str:
     df = _financial_abstract(symbol)
     if df is None or df.empty:
         return f"# 无基本面数据：{symbol}"
@@ -157,8 +157,14 @@ def get_fundamentals(symbol: str, curr_date: str) -> str:
 
 # A-share filings don't split into the three US statements the framework asks
 # for; the abstract already carries balance-sheet, cash-flow and income lines,
-# so all three route to it rather than returning nothing.
-get_balance_sheet = get_cashflow = get_income_statement = get_fundamentals
+# so all three route to it rather than returning nothing. Signatures must match
+# the yfinance ones exactly — the framework passes `freq` positionally, and a
+# mismatch aborts the run partway through with a TypeError.
+def get_balance_sheet(ticker: str, freq: str = "quarterly", curr_date: str | None = None) -> str:
+    return get_fundamentals(ticker, curr_date)
+
+
+get_cashflow = get_income_statement = get_balance_sheet
 
 
 def get_news(ticker: str, start_date: str, end_date: str) -> str:
@@ -176,6 +182,41 @@ def get_news(ticker: str, start_date: str, end_date: str) -> str:
         body = str(row["新闻内容"]).strip().replace("\n", " ")[:500]
         lines += [f"## {row['新闻标题']}", f"{row['发布时间']} · {row['文章来源']}", body, ""]
     return "\n".join(lines)
+
+
+def get_global_news(curr_date: str, look_back_days: int = 7, limit: int = 20) -> str:
+    """Macro headlines. The news_data category covers this too, so leaving it
+    unregistered aborts the whole run with 'vendor not available'."""
+    try:
+        df = ak.stock_info_global_em()
+    except Exception as exc:
+        return f"# 全球财经快讯获取失败：{exc}"
+    if df is None or df.empty:
+        return "# 无全球财经快讯"
+    lines = [f"# 全球财经快讯（截至 {curr_date}，AkShare/东方财富）", ""]
+    for _, row in df.head(limit).iterrows():
+        summary = str(row.get("摘要", "")).strip().replace("\n", " ")[:300]
+        lines += [f"## {row['标题']}", f"{row['发布时间']}", summary, ""]
+    return "\n".join(lines)
+
+
+def get_insider_transactions(symbol: str) -> str:
+    """A-share equivalent of insider filings: 高管及股东持股变动.
+
+    Returns a plain message rather than raising when unavailable — the news
+    category routes here, and an exception would abort the entire analysis over
+    a secondary data point.
+    """
+    code = _code(symbol)
+    try:
+        df = ak.stock_share_hold_change_sse() if symbol.upper().endswith(".SS") \
+            else ak.stock_share_hold_change_szse()
+        hit = df[df.astype(str).apply(lambda r: code in r.values, axis=1)]
+        if hit.empty:
+            return f"# {symbol} 近期无高管/股东持股变动记录"
+        return f"# {symbol} 高管及股东持股变动（AkShare/交易所）\n\n" + hit.head(20).to_csv(index=False)
+    except Exception as exc:
+        return f"# 持股变动数据不可用：{type(exc).__name__}（该项非决策必需）"
 
 
 # ---------- A-share-only extra: margin trading (融资融券) ----------
@@ -251,8 +292,37 @@ def register() -> None:
         ("get_cashflow", get_cashflow),
         ("get_income_statement", get_income_statement),
         ("get_news", get_news),
+        ("get_global_news", get_global_news),
+        ("get_insider_transactions", get_insider_transactions),
     ):
         if method in interface.VENDOR_METHODS:
             interface.VENDOR_METHODS[method]["akshare"] = impl
     if "akshare" not in interface.VENDOR_LIST:
         interface.VENDOR_LIST.append("akshare")
+
+    # Every method in a category we claim must have an implementation: routing
+    # is per-method, so one gap aborts the run with "vendor not available".
+    # get_global_news being missing is exactly how the first A-share run died.
+    missing = [
+        m for cat, vendor in VENDORS.items() if vendor == "akshare"
+        for m in interface.TOOLS_CATEGORIES[cat]["tools"]
+        if "akshare" not in interface.VENDOR_METHODS.get(m, {})
+    ]
+    if missing:
+        raise RuntimeError(f"akshare vendor 缺少方法实现：{missing}")
+
+    # Arity must match the vendor the framework calls positionally. Guessing the
+    # signature cost two failed runs (get_fundamentals and the statement trio),
+    # so compare against a shipped implementation and fail at startup instead.
+    import inspect
+    for method, impls in interface.VENDOR_METHODS.items():
+        ours = impls.get("akshare")
+        theirs = impls.get("yfinance") or impls.get("alpha_vantage")
+        if not ours or not theirs:
+            continue
+        theirs = theirs[0] if isinstance(theirs, list) else theirs
+        want = len(inspect.signature(theirs).parameters)
+        have = len(inspect.signature(ours).parameters)
+        if have < want:
+            raise RuntimeError(
+                f"akshare.{method} 参数不足：框架会传 {want} 个，实现只接受 {have} 个")

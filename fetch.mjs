@@ -101,8 +101,14 @@ const symbols = process.env.SYMBOL
   ? [process.env.SYMBOL.toUpperCase()]
   : JSON.parse(readFileSync('symbols.json', 'utf8')).symbols;
 
+// A-shares (.SS/.SZ) carry an AI analysis but no options chain — CBOE answers
+// 403 for them. Skipping keeps the daily log clean instead of failing loudly
+// every run for something that will never work.
+const isAShare = s => /\.(SS|SZ)$/i.test(s);
+
 let failed = 0;
 for (const s of symbols) {
+  if (isAShare(s)) { console.log(`${s}: 跳过（A 股无 CBOE 期权链）`); continue; }
   // Intraday runs only make sense for symbols already registered.
   if (INTRADAY && !existsSync(`data/${s}`)) mkdirSync(`data/${s}`, { recursive: true });
   try {
