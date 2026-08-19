@@ -39,12 +39,19 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
+          SYM=$(printf '%s' "$SYM_INPUT" | tr '[:lower:]' '[:upper:]')
           for attempt in 1 2 3 4 5; do
             git fetch -q origin master
-            git reset -q --soft FETCH_HEAD
+            # --mixed, not --soft: a soft reset keeps our stale index, so
+            # committing it would silently delete every file another run pushed
+            # between our checkout and now.
+            git reset -q --mixed FETCH_HEAD
             git checkout -q FETCH_HEAD -- symbols.json
             node add-symbol.mjs "$SYM_INPUT" --register-only
-            git add symbols.json data
+            # Stage only this symbol's directory. `git add data` also stages the
+            # removal of a data/<OTHER>/ that a concurrent run just pushed, since
+            # that directory is absent from our working tree.
+            git add symbols.json "data/$SYM"
             if git diff --cached --quiet; then
               echo "没有新内容需要提交"
               exit 0
