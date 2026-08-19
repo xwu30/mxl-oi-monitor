@@ -3,6 +3,7 @@
 #
 #   ./analysis/run-missing.sh              every symbol with no report at all
 #   ./analysis/run-missing.sh --dry-run    just list what would run
+#   ./analysis/run-missing.sh ORCL MRVL    just these, report or not (re-runs update)
 #
 # Commits and pushes after each symbol rather than at the end: a run takes ~20
 # minutes, so a batch of a dozen is hours long, and a failure partway through
@@ -13,7 +14,18 @@ HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO="$(dirname "$HERE")"
 cd "$REPO"
 
-missing=$(node -e '
+DRY=""
+args=()
+for a in "$@"; do
+  if [ "$a" = "--dry-run" ]; then DRY=1; else args+=("$a"); fi
+done
+
+if [ ${#args[@]} -gt 0 ]; then
+  # Named symbols run even if they already have a report — asking for one by
+  # name means you want it refreshed, not skipped.
+  missing="${args[*]}"
+else
+  missing=$(node -e '
 const fs = require("fs");
 const symbols = JSON.parse(fs.readFileSync("symbols.json", "utf8")).symbols;
 const has = s => {
@@ -22,6 +34,7 @@ const has = s => {
 };
 console.log(symbols.filter(s => !has(s)).join(" "));
 ')
+fi
 
 if [ -z "$missing" ]; then
   echo "所有标的都已有分析报告"
@@ -31,7 +44,7 @@ fi
 count=$(echo "$missing" | wc -w | tr -d ' ')
 echo "待分析 $count 支：$missing"
 
-if [ "${1:-}" = "--dry-run" ]; then exit 0; fi
+if [ -n "$DRY" ]; then exit 0; fi
 
 done_count=0; failed=""
 for symbol in $missing; do
