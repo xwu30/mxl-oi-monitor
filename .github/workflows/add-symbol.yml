@@ -29,11 +29,33 @@ jobs:
       - name: Initial short interest
         continue-on-error: true
         run: SYMBOL="$SYM_INPUT" node fetch-short.mjs
+      # symbols.json is a one-line JSON array, so two Add symbol runs started
+      # seconds apart edit the same line and `git pull --rebase` dies on a
+      # conflict — the losing run's symbol and the data it just fetched are both
+      # thrown away. Instead of rebasing the conflicting commit, rebuild
+      # symbols.json from whatever is on origin now and re-append this ticker;
+      # the data/<SYM>/ files are per-symbol and never collide.
       - name: Commit
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add symbols.json data
-          git diff --cached --quiet || git commit -m "add symbol: $SYM_INPUT"
-          git pull --rebase
-          git push
+          for attempt in 1 2 3 4 5; do
+            git fetch -q origin master
+            git reset -q --soft FETCH_HEAD
+            git checkout -q FETCH_HEAD -- symbols.json
+            node add-symbol.mjs "$SYM_INPUT" --register-only
+            git add symbols.json data
+            if git diff --cached --quiet; then
+              echo "没有新内容需要提交"
+              exit 0
+            fi
+            git commit -q -m "add symbol: $SYM_INPUT"
+            if git push -q; then
+              echo "已推送 $SYM_INPUT（第 $attempt 次尝试）"
+              exit 0
+            fi
+            echo "推送被并发写入抢先（第 $attempt 次），重新登记后重试"
+            sleep $((attempt * 3))
+          done
+          echo "::error::5 次尝试后仍未能推送 $SYM_INPUT"
+          exit 1
