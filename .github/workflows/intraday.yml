@@ -23,6 +23,18 @@ jobs:
           node-version: 20
       - name: Fetch intraday snapshot
         run: INTRADAY=1 node fetch.mjs
+      # Compares the fresh quote against the levels each AI report called out.
+      # continue-on-error: a failed push must not cost the snapshot, which is the
+      # data everything else is built on.
+      - name: Push level alerts
+        continue-on-error: true
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          WECOM_WEBHOOK: ${{ secrets.WECOM_WEBHOOK }}
+          SERVERCHAN_KEY: ${{ secrets.SERVERCHAN_KEY }}
+          WEBHOOK_URL: ${{ secrets.WEBHOOK_URL }}
+        run: node watch-levels.mjs
       - name: Commit data
         run: |
           git config user.name "github-actions[bot]"

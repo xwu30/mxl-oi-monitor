@@ -15,6 +15,7 @@
 //   TELEGRAM_BOT_TOKEN + TELEGRAM_CHAT_ID
 //   WEBHOOK_URL          其它任意接收端，收到 {"text": "..."}
 import { readFileSync, existsSync, readdirSync } from 'node:fs';
+import { send } from './notify.mjs';
 
 // Tuned to fire on a handful of symbols a day, not on every symbol every day.
 // Raise these if the push gets noisy — that is the whole maintenance knob.
@@ -129,34 +130,6 @@ function checkSymbol(symbol) {
   return notes;
 }
 
-// ---------- delivery ----------
-async function send(text) {
-  const post = (url, body, headers = {}) =>
-    fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json', ...headers }, body: JSON.stringify(body) });
-
-  if (process.env.WECOM_WEBHOOK) {
-    return post(process.env.WECOM_WEBHOOK, { msgtype: 'markdown', markdown: { content: text } });
-  }
-  if (process.env.SERVERCHAN_KEY) {
-    return fetch(`https://sctapi.ftqq.com/${process.env.SERVERCHAN_KEY}.send`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: new URLSearchParams({ title: '持仓异动提醒', desp: text }),
-    });
-  }
-  if (process.env.TELEGRAM_BOT_TOKEN && process.env.TELEGRAM_CHAT_ID) {
-    // Telegram's legacy Markdown marks bold with a single asterisk; sending the
-    // standard **bold** the other channels use fails to parse outright.
-    return post(`https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN}/sendMessage`, {
-      chat_id: process.env.TELEGRAM_CHAT_ID,
-      text: text.replace(/\*\*(.+?)\*\*/g, '*$1*'),
-      parse_mode: 'Markdown',
-    });
-  }
-  if (process.env.WEBHOOK_URL) return post(process.env.WEBHOOK_URL, { text });
-  return null; // no channel picked yet — not an error, see below
-}
-
 const symbols = JSON.parse(readFileSync('symbols.json', 'utf8')).symbols;
 const blocks = [];
 for (const s of symbols) {
@@ -176,7 +149,7 @@ const text = `📊 持仓异动 ${today}\n\n${blocks.join('\n\n')}\n\n`
 if (DRY) {
   console.log(text);
 } else {
-  const res = await send(text);
+  const res = await send(text, { title: '持仓异动提醒' });
   if (!res) {
     // Nothing configured is a legitimate state — the daily job shouldn't go red
     // just because no channel has been chosen yet.
