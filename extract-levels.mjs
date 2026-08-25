@@ -136,13 +136,41 @@ async function extractOne(sym) {
     if (!Number.isFinite(v) || v <= 0) return false;
     return spot ? v >= spot * 0.2 && v <= spot * 5 : true;
   };
-  const clean = a => [...new Set((Array.isArray(a) ? a : []).map(Number).filter(sane))].sort((x, y) => x - y);
+  // Reports state the same level twice at slightly different precision
+  // ("513 和 513.73", "234 和 234.19") and stack a dozen within a few percent.
+  // Each one would be its own alert: AAPL came back with 10 levels inside ±5%
+  // of spot, 7 pairs less than 1% apart. Merge a cluster down to the boundary
+  // crossed first — lowest resistance on the way up, highest support on the way
+  // down — so one price move produces one message.
+  const MERGE_PCT = 0.01;
+  const cluster = (values, pick) => {
+    const sorted = [...new Set((Array.isArray(values) ? values : []).map(Number).filter(sane))]
+      .sort((x, y) => x - y);
+    const out = [];
+    let group = [];
+    for (const v of sorted) {
+      if (group.length && (v - group[group.length - 1]) / group[group.length - 1] > MERGE_PCT) {
+        out.push(pick(group));
+        group = [];
+      }
+      group.push(v);
+    }
+    if (group.length) out.push(pick(group));
+    return out;
+  };
+  const cleanResistance = a => cluster(a, g => g[0]);
+  const cleanSupport = a => cluster(a, g => g[g.length - 1]);
 
   const dropped = [];
+  // The model sometimes answers with a list where the schema asks for one number
+  // ("target": [131.54, 114.99]). Number([a,b]) is NaN, so the old code threw the
+  // whole field away and ORCL silently lost the Price Target its report stated.
   const keep = (label, v) => {
     if (v == null) return null;
-    if (!sane(v)) { dropped.push(`${label}=${v}`); return null; }
-    return Number(v);
+    const candidates = (Array.isArray(v) ? v : [v]).map(Number).filter(sane);
+    if (!candidates.length) { dropped.push(`${label}=${v}`); return null; }
+    if (candidates.length > 1) dropped.push(`${label} 取首个于 [${candidates.join(', ')}]`);
+    return candidates[0];
   };
   const proposed = [...(parsed.support || []), ...(parsed.resistance || [])].length;
   const levels = {
@@ -150,8 +178,8 @@ async function extractOne(sym) {
     from_report: latest.date,
     rating: latest.report.decision ?? null,
     spot_at_extract: spot,
-    support: clean(parsed.support),
-    resistance: clean(parsed.resistance),
+    support: cleanSupport(parsed.support),
+    resistance: cleanResistance(parsed.resistance),
     stop_loss: keep('stop_loss', parsed.stop_loss),
     target: keep('target', parsed.target),
     extracted_at: nowET,
