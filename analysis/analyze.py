@@ -61,8 +61,17 @@ PRICES = {
     "gpt-5.4": (2.5, 15.0),
     "gemini-3-pro": (2.0, 12.0),
     "gemini-3-flash": (1.5, 7.5),
-    "deepseek-v4-pro": (0.435, 0.87),
-    "deepseek-v4-flash": (0.14, 0.28),
+    # DeepSeek repriced on 2026-08-16 and now bills peak/off-peak (peak is
+    # 01:00-04:00 and 06:00-10:00 UTC, roughly double these). Off-peak is quoted
+    # here because that is when this project's runs land; a peak run costs about
+    # twice what gets reported.
+    # The old (0.435, 0.87) sat here long after that repricing and understated
+    # every report by ~60%, so the balance ran out well before the numbers said
+    # it would. Re-check against the vendor page whenever a run looks cheap.
+    "deepseek-v4-pro": (0.66, 1.98),
+    "deepseek-v4-flash": (0.22, 0.66),
+    "qwen3.7-flash": (0.03, 0.13),
+    "qwen3.7-max": (1.25, 3.75),
 }
 
 
