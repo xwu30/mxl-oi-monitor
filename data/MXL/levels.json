@@ -1,0 +1,17 @@
+{
+  "symbol": "MXL",
+  "from_report": "2026-08-13",
+  "rating": "Underweight",
+  "spot_at_extract": 63.6943,
+  "support": [
+    57.25,
+    64.86
+  ],
+  "resistance": [
+    82.85,
+    89.04
+  ],
+  "stop_loss": 82.85,
+  "target": 64.86,
+  "extracted_at": "2026-08-25 15:13"
+}

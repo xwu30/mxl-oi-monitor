@@ -1,0 +1,17 @@
+{
+  "symbol": "V",
+  "from_report": "2026-08-17",
+  "rating": "Hold",
+  "spot_at_extract": 381.4401,
+  "support": [
+    331,
+    351.57
+  ],
+  "resistance": [
+    362.37,
+    373.18
+  ],
+  "stop_loss": 358.2,
+  "target": 330,
+  "extracted_at": "2026-08-25 15:13"
+}

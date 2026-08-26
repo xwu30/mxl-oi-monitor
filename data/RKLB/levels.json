@@ -1,0 +1,19 @@
+{
+  "symbol": "RKLB",
+  "from_report": "2026-08-17",
+  "rating": "Underweight",
+  "spot_at_extract": 67.565,
+  "support": [
+    72,
+    79
+  ],
+  "resistance": [
+    84.82,
+    87.9,
+    90,
+    95
+  ],
+  "stop_loss": 78.5,
+  "target": 105,
+  "extracted_at": "2026-08-25 15:13"
+}

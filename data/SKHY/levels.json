@@ -1,0 +1,19 @@
+{
+  "symbol": "SKHY",
+  "from_report": "2026-08-14",
+  "rating": "Underweight",
+  "spot_at_extract": 158.75,
+  "support": [
+    135,
+    149.84,
+    152
+  ],
+  "resistance": [
+    170,
+    175.71,
+    193.92
+  ],
+  "stop_loss": 152,
+  "target": 135,
+  "extracted_at": "2026-08-25 15:13"
+}

@@ -1,0 +1,18 @@
+{
+  "symbol": "META",
+  "from_report": "2026-08-25",
+  "rating": "Hold",
+  "spot_at_extract": 565.8722,
+  "support": [
+    530,
+    544
+  ],
+  "resistance": [
+    571,
+    592,
+    622.68
+  ],
+  "stop_loss": 525,
+  "target": 592,
+  "extracted_at": "2026-08-25 15:13"
+}

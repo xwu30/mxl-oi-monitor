@@ -1,0 +1,18 @@
+{
+  "symbol": "ONDS",
+  "from_report": "2026-08-17",
+  "rating": "Underweight",
+  "spot_at_extract": 8.295,
+  "support": [
+    7.67,
+    8,
+    8.33
+  ],
+  "resistance": [
+    9.38,
+    9.77
+  ],
+  "stop_loss": 8.33,
+  "target": null,
+  "extracted_at": "2026-08-25 15:13"
+}

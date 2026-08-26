@@ -1,0 +1,19 @@
+{
+  "symbol": "MSFT",
+  "from_report": "2026-08-17",
+  "rating": "Overweight",
+  "spot_at_extract": 489.1164,
+  "support": [
+    454,
+    461
+  ],
+  "resistance": [
+    491.52,
+    502.5,
+    550,
+    720
+  ],
+  "stop_loss": 453.9,
+  "target": 560.27,
+  "extracted_at": "2026-08-25 15:13"
+}

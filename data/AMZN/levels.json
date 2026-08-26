@@ -1,0 +1,16 @@
+{
+  "symbol": "AMZN",
+  "from_report": "2026-08-17",
+  "rating": "Hold",
+  "spot_at_extract": 260.435,
+  "support": [
+    248,
+    257
+  ],
+  "resistance": [
+    265
+  ],
+  "stop_loss": 237.86,
+  "target": null,
+  "extracted_at": "2026-08-25 15:13"
+}

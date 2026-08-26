@@ -1,0 +1,18 @@
+{
+  "symbol": "AAPL",
+  "from_report": "2026-08-21",
+  "rating": "Hold",
+  "spot_at_extract": 309.3251,
+  "support": [
+    281,
+    289.84
+  ],
+  "resistance": [
+    310,
+    314,
+    325
+  ],
+  "stop_loss": 281,
+  "target": 320,
+  "extracted_at": "2026-08-25 15:13"
+}

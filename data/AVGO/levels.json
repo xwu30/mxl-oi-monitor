@@ -1,0 +1,17 @@
+{
+  "symbol": "AVGO",
+  "from_report": "2026-08-17",
+  "rating": "Overweight",
+  "spot_at_extract": 360.62,
+  "support": [
+    365,
+    388
+  ],
+  "resistance": [
+    397,
+    416
+  ],
+  "stop_loss": 364.5,
+  "target": 515,
+  "extracted_at": "2026-08-25 15:13"
+}

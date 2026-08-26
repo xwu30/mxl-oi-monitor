@@ -1,0 +1,17 @@
+{
+  "symbol": "AMD",
+  "from_report": "2026-08-17",
+  "rating": "Overweight",
+  "spot_at_extract": 475.7,
+  "support": [
+    494
+  ],
+  "resistance": [
+    514.39,
+    552.33,
+    580.91
+  ],
+  "stop_loss": 490,
+  "target": 556,
+  "extracted_at": "2026-08-25 15:13"
+}

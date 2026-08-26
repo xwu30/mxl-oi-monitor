@@ -1,0 +1,15 @@
+{
+  "symbol": "ORCL",
+  "from_report": "2026-08-18",
+  "rating": "Underweight",
+  "spot_at_extract": 145.725,
+  "support": [],
+  "resistance": [
+    143,
+    145,
+    148.9
+  ],
+  "stop_loss": 137.22,
+  "target": 131.54,
+  "extracted_at": "2026-08-25 15:13"
+}

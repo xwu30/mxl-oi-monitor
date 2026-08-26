@@ -1,0 +1,23 @@
+{
+  "symbol": "MU",
+  "from_report": "2026-08-19",
+  "rating": "Underweight",
+  "spot_at_extract": 926.205,
+  "support": [
+    739,
+    766,
+    848,
+    900,
+    930
+  ],
+  "resistance": [
+    950,
+    962,
+    1000,
+    1023,
+    1036
+  ],
+  "stop_loss": 1036,
+  "target": 850,
+  "extracted_at": "2026-08-25 15:13"
+}

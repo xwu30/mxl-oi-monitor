@@ -2,16 +2,17 @@
   "symbol": "CRCL",
   "from_report": "2026-08-24",
   "rating": "Underweight",
-  "spot_at_extract": 89.375,
+  "spot_at_extract": 90.97,
   "support": [
     70.5,
-    78.6
+    78.6,
+    85
   ],
   "resistance": [
     88,
-    92
+    91.94
   ],
   "stop_loss": 85,
   "target": 78.6,
-  "extracted_at": "2026-08-24 10:30"
+  "extracted_at": "2026-08-25 15:13"
 }
