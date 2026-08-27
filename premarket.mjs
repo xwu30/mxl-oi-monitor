@@ -195,8 +195,59 @@ function section(title, keep, note) {
   return `\n\n━━ ${title} ━━\n${note}\n\n` + blocks.join('\n\n');
 }
 
+// One desk putting the same trade on across a basket shows up as several
+// symbols sharing an expiry, a side, and a strike distance — and a per-symbol
+// scan cannot see it. On 2026-08-26 four mega-caps (AMZN $130, MSFT $250,
+// META $280, ORCL $75) all traded 2028-01-21 puts inside a 2.3-point band around
+// -50%, META's against standing OI of 73. Each line alone reads as an oddity;
+// the four together read as a program.
+const CLUSTER_MIN_SYMBOLS = 3;
+const CLUSTER_MONEYNESS_TOL = 5; // percentage points
+
+function crossSymbol() {
+  const groups = new Map();
+  for (const r of results) {
+    // Near-dated only ever clusters on the obvious: every mega-cap trades
+    // at-the-money weeklies, so META/AAPL/TSLA/SNDK all showing up on the same
+    // Friday call strike band is the market's default state, not a program.
+    // Reporting it would dress up the baseline as a finding.
+    for (const s of [...r.spreads, ...r.singles].filter(s => s.dte > NEAR_DTE_MAX)) {
+      const key = `${s.expiry}|${s.side}`;
+      if (!groups.has(key)) groups.set(key, []);
+      groups.get(key).push({ ...s, sym: r.sym });
+    }
+  }
+  const found = [];
+  for (const items of groups.values()) {
+    const sorted = [...items].sort((a, b) => a.away - b.away);
+    let group = [];
+    const flush = () => {
+      if (new Set(group.map(g => g.sym)).size >= CLUSTER_MIN_SYMBOLS) found.push(group.slice());
+      group = [];
+    };
+    for (const it of sorted) {
+      if (group.length && it.away - group[0].away > CLUSTER_MONEYNESS_TOL) flush();
+      group.push(it);
+    }
+    flush();
+  }
+  if (!found.length) return '';
+  const size = g => g.reduce((x, i) => x + i.vol, 0);
+  found.sort((a, b) => size(b) - size(a));
+
+  const blocks = found.slice(0, 2).map(g => {
+    const { expiry, side, dte } = g[0];
+    const rows = [...g].sort((a, b) => b.vol - a.vol)
+      .map(i => `- ${i.sym} $${money(i.strike)}（${pct(i.away)}） 换手 ${num(i.vol)} / 持仓 ${num(i.oi)}`);
+    return `**${expiry}（${dte}天）${side} · ${new Set(g.map(i => i.sym)).size} 支标的**\n` + rows.join('\n');
+  });
+  return '\n\n━━ 跨标的共同形态 ━━\n多支标的在同一到期日、相近价位同时换手\n\n'
+    + blocks.join('\n\n');
+}
+
 const body =
-  section('中长期布局（14天以上）', d => d > NEAR_DTE_MAX, '罕见、刻意，信息量最高')
+  crossSymbol()
+  + section('中长期布局（14天以上）', d => d > NEAR_DTE_MAX, '罕见、刻意，信息量最高')
   + section('近月异动（1–13天）', d => d <= NEAR_DTE_MAX, '多为周度博弈，隔夜即可能作废');
 
 if (!body.trim()) { console.log('期权链无显著异动，不推送'); process.exit(0); }
