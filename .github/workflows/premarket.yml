@@ -1,0 +1,31 @@
+name: Pre-market digest
+
+on:
+  schedule:
+    # 13:00 UTC = 9:00am ET in summer (EDT), 8:00am in winter (EST). Both land
+    # before the 9:30 open. Nothing is fetched here — the digest reads the daily
+    # snapshot taken at 11:30am ET the previous session, which is the freshest
+    # complete chain that exists before the bell.
+    - cron: '0 13 * * 1-5'
+  workflow_dispatch:
+
+# Read-only: this job sends a message and writes nothing back to the repo.
+permissions:
+  contents: read
+
+jobs:
+  digest:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Push pre-market digest
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          WECOM_WEBHOOK: ${{ secrets.WECOM_WEBHOOK }}
+          SERVERCHAN_KEY: ${{ secrets.SERVERCHAN_KEY }}
+          WEBHOOK_URL: ${{ secrets.WEBHOOK_URL }}
+        run: node premarket.mjs
