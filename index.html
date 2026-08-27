@@ -106,6 +106,27 @@
   }
   .hint { background: var(--tile); border-radius: 8px; padding: 8px 12px; font-size: 12px; color: var(--ink-2); margin: 10px 0; }
   .metrics { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 10px; margin: 10px 0 4px; }
+  /* Price ladder: every level the report named, high to low, with the live
+     quote slotted into its true position so "where are we now" is one glance. */
+  .ladder { margin: 10px 0 2px; font-variant-numeric: tabular-nums; }
+  .rung { display: grid; grid-template-columns: 58px 92px 74px 1fr;
+          align-items: center; gap: 8px; padding: 5px 8px; border-radius: 6px; }
+  .rung + .rung { margin-top: 2px; }
+  .rung .kind { font-size: 11px; font-weight: 600; }
+  .rung .px { font-weight: 600; }
+  .rung .gap { font-size: 12px; color: var(--muted); }
+  .rung .tag { font-size: 11px; color: var(--muted); }
+  .rung.res { background: rgba(227,73,72,0.07); }
+  .rung.res .kind { color: var(--down-text); }
+  .rung.sup { background: rgba(27,175,122,0.09); }
+  .rung.sup .kind { color: #0f7d55; }
+  /* The spot row is the reference line, not a level — heavier, no fill tint. */
+  .rung.spot { background: var(--tile); border: 1px solid var(--border); margin: 4px 0; }
+  .rung.spot .kind, .rung.spot .px { color: var(--ink); }
+  .rung.hit { outline: 1px dashed var(--baseline); }
+  @media (max-width: 560px) {
+    .rung { grid-template-columns: 48px 78px 62px 1fr; gap: 6px; padding: 5px 6px; }
+  }
   .metric { background: var(--tile); border-radius: 10px; padding: 12px 14px; }
   .metric .mk { font-size: 12px; color: var(--muted); }
   .metric .mv { display: flex; align-items: baseline; flex-wrap: wrap; gap: 7px; margin-top: 3px; font-variant-numeric: tabular-nums; }
@@ -143,6 +164,12 @@
   <div class="sub" id="subline">加载中…</div>
 
   <div class="tiles" id="tiles"></div>
+
+  <div class="card" id="levelsCard" style="display:none">
+    <h2>报告价位（支撑 / 阻力）</h2>
+    <div class="note" id="levelsNote"></div>
+    <div class="ladder" id="ladder"></div>
+  </div>
 
   <div class="filters">
     <div><label for="selSym">股票</label><select id="selSym"></select></div>
@@ -246,6 +273,9 @@ const fmt = n => n.toLocaleString('en-US');
 const hm = t => t.slice(0, 2) + ':' + t.slice(2);
 const cache = new Map();
 let INDEX = null, INTRA = null, SYM = null, SYMBOLS = [];
+// Latest rendered spot. The ladder needs it to place the "现价" rung, and the
+// snapshot it comes from is a local inside render().
+let SPOT = null;
 
 // GitHub Pages serves cache-control: max-age=600, so a file that gets rewritten
 // during the day (the indexes, and today's snapshot) would keep showing its
@@ -482,6 +512,10 @@ function renderTiles(cur, rows, baseLabel, intra) {
     tile(`Call ${name}`, fmt(tc), `Δ ${signedSpan(dtc)}${vs}`) +
     tile(`Put ${name}`, fmt(tp), `Δ ${signedSpan(dtp)}${vs}`) +
     tile('Put / Call 比', tc > 0 ? (tp / tc).toFixed(2) : '—', intra ? '成交量口径' : 'OI 口径');
+  // Keep the ladder's 现价 rung in step with the tile, including when the user
+  // switches the date selectors to an older snapshot.
+  SPOT = cur.spot;
+  renderLevels();
 }
 
 // ---------- TradingAgents analysis ----------
@@ -574,6 +608,68 @@ async function loadAnalysis() {
     try { ANALYSIS = await loadJSON(fresh(`data/${SYM}/analysis/${$('selAI').value}.json`)); } catch { ANALYSIS = null; }
   }
   renderAnalysis();
+}
+
+// ---------- report price levels ----------
+// data/<SYM>/levels.json is written by extract-levels.mjs from the latest AI
+// report; level-alerts.json records which ones watch-levels.mjs has already
+// pushed. Both are optional — a symbol added today has neither yet.
+let LEVELS = null, LEVEL_HITS = null;
+
+async function loadLevels() {
+  try { LEVELS = await loadJSON(fresh(`data/${SYM}/levels.json`)); } catch { LEVELS = null; }
+  try { LEVEL_HITS = await loadJSON(fresh(`data/${SYM}/level-alerts.json`)); } catch { LEVEL_HITS = null; }
+  renderLevels();
+}
+
+function renderLevels() {
+  const card = $('levelsCard');
+  if (!LEVELS || (!LEVELS.support?.length && !LEVELS.resistance?.length)) {
+    card.style.display = 'none';
+    return;
+  }
+  card.style.display = '';
+
+  // Prefer the live quote over the price the levels were extracted at — the
+  // whole point of the ladder is where the stock sits *now* relative to them.
+  const spot = (typeof SPOT === 'number') ? SPOT
+    : (typeof LEVELS.spot_at_extract === 'number' ? LEVELS.spot_at_extract : null);
+
+  const fmt = v => (v >= 100 ? v.toFixed(1) : v.toFixed(2));
+  // A level may be both the stop and a support (CRCL's $85 was); collect every
+  // role so the row says so instead of silently picking one.
+  const roles = v => {
+    const r = [];
+    if (LEVELS.stop_loss != null && Math.abs(LEVELS.stop_loss - v) < 1e-9) r.push('止损');
+    if (LEVELS.target != null && Math.abs(LEVELS.target - v) < 1e-9) r.push('目标价');
+    return r;
+  };
+  const firedOn = key => (LEVEL_HITS?.from_report === LEVELS.from_report ? LEVEL_HITS.fired?.[key] : null);
+
+  const rows = [];
+  for (const v of LEVELS.resistance || []) rows.push({ v, kind: 'res', label: '阻力', key: `resistance@${v}` });
+  for (const v of LEVELS.support || []) rows.push({ v, kind: 'sup', label: '支撑', key: `support@${v}` });
+  if (spot != null) rows.push({ v: spot, kind: 'spot', label: '现价' });
+  rows.sort((a, b) => b.v - a.v);
+
+  $('ladder').innerHTML = rows.map(r => {
+    const gap = (spot != null && r.kind !== 'spot')
+      ? `${r.v > spot ? '+' : ''}${((r.v / spot - 1) * 100).toFixed(1)}%` : '';
+    const tags = r.kind === 'spot' ? [] : roles(r.v);
+    const hit = r.kind === 'spot' ? null : firedOn(r.key);
+    if (hit) tags.push(`已触发 ${hit}`);
+    return `<div class="rung ${r.kind}${hit ? ' hit' : ''}">
+      <span class="kind">${r.label}</span>
+      <span class="px">$${fmt(r.v)}</span>
+      <span class="gap">${gap}</span>
+      <span class="tag">${tags.join(' · ')}</span>
+    </div>`;
+  }).join('');
+
+  const rating = LEVELS.rating ? `${LEVELS.rating} · ` : '';
+  $('levelsNote').innerHTML = `${rating}取自 ${LEVELS.from_report} 的 AI 报告原文`
+    + `（阻力 = 上方压力，支撑 = 下方承接）。`
+    + `<b>报告结论未经回测验证</b>，价位仅供对照，非买卖建议。`;
 }
 
 // ---------- short interest / securities lending ----------
@@ -814,6 +910,10 @@ async function loadSymbolData() {
     document.title = `${SYM} 分析`;
     $('subline').textContent = `${SYM} · 非美股标的，无期权持仓数据，仅显示 AI 分析`;
     SHORT = null;
+    // No option chain means no spot from a snapshot; the ladder falls back to
+    // the price recorded when the levels were extracted.
+    SPOT = null;
+    await loadLevels();
     await loadAnalysis();
     return;
   }
@@ -833,6 +933,7 @@ async function loadSymbolData() {
   // OI view from rendering (a freshly added symbol has none until the next run).
   try { SHORT = await loadJSON(fresh(`data/${SYM}/short.json`)); } catch { SHORT = null; }
   renderShort();
+  await loadLevels();
   await loadAnalysis();
   setupModeSelectors();
 }
