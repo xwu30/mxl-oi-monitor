@@ -71,6 +71,13 @@ PRICES = {
     "deepseek-v4-pro": (0.66, 1.98),
     "deepseek-v4-flash": (0.22, 0.66),
     "qwen3.7-flash": (0.03, 0.13),
+    # The dated snapshot carries its own free-quota allocation, separate from the
+    # rolling alias — the alias ran dry while this one sat untouched at 1M tokens.
+    # Same rate card; pin it and the reports keep costing flash money.
+    "qwen3.7-flash-2026-07-15": (0.03, 0.13),
+    # Model Studio list price; OpenRouter resells the same model at 0.32/1.28.
+    # The higher figure is quoted so a run is never reported cheaper than it was.
+    "qwen3.7-plus": (0.40, 1.60),
     "qwen3.7-max": (1.25, 3.75),
 }
 
