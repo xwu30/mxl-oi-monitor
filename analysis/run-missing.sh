@@ -55,6 +55,15 @@ for symbol in $missing; do
     continue
   fi
 
+  # The homepage ladder and the intraday level alerts both read levels.json, so
+  # a fresh report without a fresh extraction leaves the site quoting the old
+  # report's prices. NBIS sat exactly like that — report moved to 08-28, levels
+  # still said 08-14, and nothing surfaced the mismatch. Non-fatal: the report is
+  # the valuable artifact and must still be committed if this step fails.
+  if ! node "$REPO/extract-levels.mjs" "$symbol"; then
+    echo "!! $symbol 价位提取失败，报告照常提交（稍后可单独跑 node extract-levels.mjs $symbol）"
+  fi
+
   git add data
   if git diff --cached --quiet; then
     echo "!! $symbol 没有产出新文件，跳过提交"

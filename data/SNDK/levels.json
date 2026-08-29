@@ -1,0 +1,19 @@
+{
+  "symbol": "SNDK",
+  "from_report": "2026-08-28",
+  "rating": "Hold",
+  "spot_at_extract": 1481.89,
+  "support": [
+    970,
+    1400,
+    1435
+  ],
+  "resistance": [
+    1520,
+    1600,
+    1700
+  ],
+  "stop_loss": null,
+  "target": 1900,
+  "extracted_at": "2026-08-28 23:18"
+}

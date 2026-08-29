@@ -1,0 +1,17 @@
+{
+  "symbol": "BE",
+  "from_report": "2026-08-26",
+  "rating": "Hold",
+  "spot_at_extract": 210.33,
+  "support": [
+    193,
+    201,
+    214
+  ],
+  "resistance": [
+    240
+  ],
+  "stop_loss": null,
+  "target": 255,
+  "extracted_at": "2026-08-28 23:18"
+}
