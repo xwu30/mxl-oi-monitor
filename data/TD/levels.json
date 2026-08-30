@@ -1,0 +1,13 @@
+{
+  "symbol": "TD",
+  "from_report": "2026-08-29",
+  "rating": "Hold",
+  "spot_at_extract": 120.53,
+  "support": [],
+  "resistance": [
+    125.24
+  ],
+  "stop_loss": 116.55,
+  "target": 125.24,
+  "extracted_at": "2026-08-29 20:20"
+}
