@@ -3,6 +3,10 @@
 # the web-facing copy of each analysis lives in data/<SYM>/analysis/ and IS committed.
 analysis/.venv/
 analysis/.env
+# .env.bak, .env.bak2, … hold the same API keys. A global ~/.gitignore happens to
+# cover them on this machine; do not rely on that on any other clone.
+analysis/.env.*
+!analysis/.env.example
 analysis/reports/
 __pycache__/
 *.pyc

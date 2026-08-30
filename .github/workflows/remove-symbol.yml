@@ -1,0 +1,53 @@
+name: Remove symbol
+
+on:
+  workflow_dispatch:
+    inputs:
+      symbol:
+        description: '要删除的股票代码（连同它的全部历史数据）'
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  remove:
+    runs-on: ubuntu-latest
+    env:
+      SYM_INPUT: ${{ inputs.symbol }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      # Same race as Add symbol: symbols.json is one line, so two runs started
+      # seconds apart collide. Rebuild it from origin and re-apply the removal
+      # rather than rebasing a conflicting commit.
+      - name: Remove and commit
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          SYM=$(printf '%s' "$SYM_INPUT" | tr '[:lower:]' '[:upper:]')
+          for attempt in 1 2 3 4 5; do
+            git fetch -q origin master
+            git reset -q --mixed FETCH_HEAD
+            git checkout -q FETCH_HEAD -- symbols.json
+            node remove-symbol.mjs "$SYM_INPUT"
+            # -A so the directory's deletion is staged; scoped to this symbol so
+            # a concurrent run's new data/<OTHER>/ is never staged as removed.
+            git add symbols.json
+            git add -A "data/$SYM" || true
+            if git diff --cached --quiet; then
+              echo "$SYM 已不在列表中，无需改动"
+              exit 0
+            fi
+            git commit -q -m "remove symbol: $SYM"
+            if git push -q; then
+              echo "已删除 $SYM（第 $attempt 次尝试）"
+              exit 0
+            fi
+            echo "推送被并发写入抢先（第 $attempt 次），重新计算后重试"
+            sleep $((attempt * 3))
+          done
+          echo "::error::5 次尝试后仍未能删除 $SYM"
+          exit 1

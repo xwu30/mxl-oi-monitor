@@ -16,8 +16,10 @@ past-context — the portfolio manager sees them alongside its own research.
 from __future__ import annotations
 
 import argparse
+import calendar
 import json
 import os
+import re
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
@@ -80,6 +82,58 @@ PRICES = {
     "qwen3.7-plus": (0.40, 1.60),
     "qwen3.7-max": (1.25, 3.75),
 }
+
+
+_DATE_RE = re.compile(r"^(\d{4})-(\d{2})-(\d{2})$")
+
+
+def _clamp_date(value):
+    """Snap an impossible calendar date onto the last real day of its month.
+
+    The market analyst picks its own lookback window, and on the 29th-31st it
+    asks for a date that does not exist: 2026-08-29 minus six months is
+    "2026-02-29", and 2026 is not a leap year. The vendor's strptime then raises
+    "day is out of range for month" and the whole report dies over one bad
+    string — TD failed exactly this way on 2026-08-29. Clamping loses at most a
+    couple of days off the far end of a six-month window, which no indicator
+    cares about; failing loses the report.
+    """
+    m = _DATE_RE.match(value) if isinstance(value, str) else None
+    if not m:
+        return value
+    year, month, day = (int(g) for g in m.groups())
+    if not 1 <= month <= 12:
+        return value
+    last = calendar.monthrange(year, month)[1]
+    if 1 <= day <= last:
+        return value
+    fixed = f"{year:04d}-{month:02d}-{min(max(day, 1), last):02d}"
+    print(f"[日期修正] 模型要了不存在的 {value}，改用 {fixed}")
+    return fixed
+
+
+def patch_invalid_tool_dates() -> None:
+    """Clamp bad dates in every data tool call, at the one point they share.
+
+    Each tool module does `from ...interface import route_to_vendor` at import
+    time, so patching the interface module alone would miss them; rebind the
+    name wherever it already points at the original.
+    """
+    import tradingagents.dataflows.interface as interface
+
+    original = interface.route_to_vendor
+    if getattr(original, "_date_clamped", False):
+        return
+
+    def routed(method, *args, **kwargs):
+        return original(method,
+                        *(_clamp_date(a) for a in args),
+                        **{k: _clamp_date(v) for k, v in kwargs.items()})
+
+    routed._date_clamped = True
+    for module in list(sys.modules.values()):
+        if getattr(module, "route_to_vendor", None) is original:
+            module.route_to_vendor = routed
 
 
 def price_of(model: str):
@@ -255,6 +309,8 @@ def build_local_context(symbol: str) -> str:
 def run_symbol(symbol: str, trade_date: str, depth: str, use_local: bool) -> dict:
     from tradingagents.default_config import DEFAULT_CONFIG
     from tradingagents.graph.trading_graph import TradingAgentsGraph
+
+    patch_invalid_tool_dates()
 
     provider, deep_model, quick_model = resolve_provider()
     analysts, debate_rounds, risk_rounds = DEPTHS[depth]
