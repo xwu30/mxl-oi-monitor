@@ -136,6 +136,99 @@ def patch_invalid_tool_dates() -> None:
             module.route_to_vendor = routed
 
 
+# Ratings that express a short / underweight tilt, lowercased for matching.
+BEARISH_RATINGS = {"underweight", "sell", "strong sell", "reduce"}
+
+
+def patch_outcome_sign() -> None:
+    """Log a realized return from the position's side, not the stock's.
+
+    ``TradingAgentsGraph._fetch_returns`` computes ``(close_n - close_0)/close_0``
+    and ``alpha = raw - benchmark`` with no regard for whether the call was long
+    or short, and the memory log writes both numbers next to the rating. So a
+    bearish call that got run over is written down as a *gain*: TSLA's
+    2026-08-14 Underweight became ``[... | Underweight | +6.0% | +7.4% | 5d]``
+    while the stock actually rose 7.6% — and the 2026-08-31 run then cited it as
+    "与上一周期决策（Underweight，+7.4% alpha）保持一致", building a fresh
+    Underweight on top of a defeat it had been told was a victory.
+
+    The distortion only runs one way: a bullish call that loses is already
+    logged negative and reads as a failure, so only bearish ratings flip. What
+    you gain by underweighting a name is what the benchmark made instead of it
+    (``-alpha`` = ``bench_ret - raw``), and the position's own return is
+    ``-raw``. Hold carries no tilt, so its raw stock move is left alone.
+    """
+    from tradingagents.graph.trading_graph import TradingAgentsGraph
+
+    original = TradingAgentsGraph._fetch_returns
+    if getattr(original, "_sign_corrected", False):
+        return
+
+    def fetch_returns(self, ticker, trade_date, *args, **kwargs):
+        raw, alpha, days = original(self, ticker, trade_date, *args, **kwargs)
+        if raw is None or alpha is None:
+            return raw, alpha, days
+        rating = ""
+        try:
+            for entry in self.memory_log.get_pending_entries():
+                if entry.get("ticker") == ticker and entry.get("date") == trade_date:
+                    rating = (entry.get("rating") or "").strip().lower()
+                    break
+        except Exception:
+            # An unreadable log must not cost the whole run; an uncorrected
+            # number is bad, a crashed analysis is worse.
+            return raw, alpha, days
+        if rating in BEARISH_RATINGS:
+            print(f"[方向修正] {ticker} {trade_date} 是 {rating}，"
+                  f"股价 {raw:+.1%}/alpha {alpha:+.1%} → 按持仓方向记为 "
+                  f"{-raw:+.1%}/{-alpha:+.1%}")
+            return -raw, -alpha, days
+        return raw, alpha, days
+
+    fetch_returns._sign_corrected = True
+    TradingAgentsGraph._fetch_returns = fetch_returns
+
+
+def patch_reflection_verdict() -> None:
+    """Tell the reflector in words whether the call won or lost.
+
+    The reflection prompt asks "Was the directional call correct? (cite the
+    alpha figure)" and hands over a bare signed percentage — and the model does
+    not read the sign. Given a corrected -7.4% it still wrote "The directional
+    underweight call was correct, confirmed by the -7.4% alpha versus SPY", the
+    same false verdict as before, only with a minus in front of it. Fixing the
+    number alone therefore fixes nothing: the prose is what the next run reads.
+
+    Once patch_outcome_sign() has made the sign mean "how the position did", the
+    verdict is a pure function of it, so state it rather than hoping the model
+    infers it.
+    """
+    from tradingagents.graph.reflection import Reflector
+
+    original = Reflector.reflect_on_final_decision
+    if getattr(original, "_verdict_stated", False):
+        return
+
+    def reflect(self, final_decision, raw_return, alpha_return,
+                benchmark_name="SPY", *args, **kwargs):
+        verdict = "LOST money" if alpha_return < 0 else "MADE money"
+        vs = "underperformed" if alpha_return < 0 else "outperformed"
+        header = (
+            f"OUTCOME (already settled — do not re-derive it from the numbers): "
+            f"this call {verdict}. The position returned {raw_return:+.1%} and "
+            f"{vs} {benchmark_name} by {abs(alpha_return):.1%}. Returns below are "
+            f"stated from the position's side, so a negative number means the "
+            f"call was wrong regardless of whether it was long or short. Judge "
+            f"the decision against that fact.\n\n"
+            f"Decision as originally written:"
+        )
+        return original(self, f"{header}\n{final_decision}", raw_return,
+                        alpha_return, benchmark_name, *args, **kwargs)
+
+    reflect._verdict_stated = True
+    Reflector.reflect_on_final_decision = reflect
+
+
 def price_of(model: str):
     """Longest-prefix match so dated or suffixed model ids still price."""
     hit = [k for k in PRICES if model.startswith(k)]
@@ -311,6 +404,8 @@ def run_symbol(symbol: str, trade_date: str, depth: str, use_local: bool) -> dic
     from tradingagents.graph.trading_graph import TradingAgentsGraph
 
     patch_invalid_tool_dates()
+    patch_outcome_sign()
+    patch_reflection_verdict()
 
     provider, deep_model, quick_model = resolve_provider()
     analysts, debate_rounds, risk_rounds = DEPTHS[depth]
