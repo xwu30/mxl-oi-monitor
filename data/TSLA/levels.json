@@ -1,17 +1,17 @@
 {
   "symbol": "TSLA",
-  "from_report": "2026-08-14",
+  "from_report": "2026-08-31",
   "rating": "Underweight",
-  "spot_at_extract": 351.67,
+  "spot_at_extract": 368.03,
   "support": [
-    331.1
+    359.82
   ],
   "resistance": [
-    341.64,
-    372.71,
-    406.63
+    370,
+    380,
+    400.57
   ],
-  "stop_loss": 280,
+  "stop_loss": 400.57,
   "target": 297,
-  "extracted_at": "2026-08-25 15:13"
+  "extracted_at": "2026-08-31 20:37"
 }
