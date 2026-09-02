@@ -1,0 +1,16 @@
+{
+  "symbol": "QQQ",
+  "from_report": "2026-09-01",
+  "rating": "Hold",
+  "spot_at_extract": 707.8299,
+  "support": [
+    655,
+    703
+  ],
+  "resistance": [
+    711
+  ],
+  "stop_loss": 655,
+  "target": 711,
+  "extracted_at": "2026-09-01 22:57"
+}
