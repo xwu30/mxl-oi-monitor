@@ -1,0 +1,16 @@
+{
+  "symbol": "MDB",
+  "from_report": "2026-09-02",
+  "rating": "Hold",
+  "spot_at_extract": null,
+  "support": [
+    341
+  ],
+  "resistance": [
+    367,
+    418
+  ],
+  "stop_loss": null,
+  "target": null,
+  "extracted_at": "2026-09-02 10:03"
+}
