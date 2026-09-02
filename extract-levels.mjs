@@ -54,13 +54,25 @@ const latestReport = sym => {
   return { date: file.replace('.json', ''), report: JSON.parse(readFileSync(`${dir}/${file}`, 'utf8')) };
 };
 
-const spotOf = sym => {
+// The price the report was written against, not today's. They are the same when
+// extraction follows the run (which is how run-missing.sh drives it), but a
+// --force back-fill days later would otherwise measure the levels against a
+// price that has since moved — and the direction check below would then flip
+// correctly-labelled levels. Falls back to the newest snapshot when the report
+// date has none (a weekend run, or a symbol added after the report).
+const spotOf = (sym, onDate) => {
   const idx = `data/${sym}/index.json`;
   if (!existsSync(idx)) return null;
-  const dates = JSON.parse(readFileSync(idx, 'utf8')).dates || [];
-  for (let i = dates.length - 1; i >= 0; i--) {
-    const f = `data/${sym}/${dates[i]}.json`;
-    if (existsSync(f)) return JSON.parse(readFileSync(f, 'utf8')).spot ?? null;
+  const dates = (JSON.parse(readFileSync(idx, 'utf8')).dates || []).slice().sort();
+  const upTo = onDate ? dates.filter(d => d <= onDate) : dates;
+  for (const list of [upTo, dates]) {
+    for (let i = list.length - 1; i >= 0; i--) {
+      const f = `data/${sym}/${list[i]}.json`;
+      if (existsSync(f)) {
+        const v = JSON.parse(readFileSync(f, 'utf8')).spot;
+        if (typeof v === 'number') return v;
+      }
+    }
   }
   return null;
 };
@@ -130,7 +142,7 @@ async function extractOne(sym) {
   // Guard against a hallucinated or mis-scaled number quietly becoming an alert
   // that fires on every tick. Anything outside 0.2x-5x of spot is not a level
   // for this stock — it is a percentage, a share count, or another ticker.
-  const spot = spotOf(sym);
+  const spot = spotOf(sym, latest.date);
   const sane = n => {
     const v = Number(n);
     if (!Number.isFinite(v) || v <= 0) return false;
@@ -161,6 +173,38 @@ async function extractOne(sym) {
   const cleanResistance = a => cluster(a, g => g[0]);
   const cleanSupport = a => cluster(a, g => g[g.length - 1]);
 
+  // Direction came entirely from the model, and it gets it wrong: MDB's report
+  // called the 50-day SMA at 367 "当前价格的直接下方支撑" and said to cut on a
+  // break of it, yet the extraction filed 367 under resistance while the stock
+  // traded at 388. watch-levels.mjs reads these positionally — up through a
+  // resistance, down through a support — so a swapped label pushes the opposite
+  // signal of what the report meant.
+  //
+  // Below spot is support and above spot is resistance; that is what the word
+  // means and what the alert does with it. Only reclassify past a tolerance,
+  // because a report legitimately calls a band straddling the price "阻力区"
+  // (AAPL: 310 named as resistance with the stock at 311.31), and rewriting
+  // those adds noise without fixing anything.
+  const FLIP_PCT = 0.02;
+  const fixDirection = (support, resistance) => {
+    if (!spot) return { support, resistance, flipped: [] };
+    const flipped = [];
+    const sup = [], res = [];
+    for (const v of resistance) {
+      if (v < spot * (1 - FLIP_PCT)) { sup.push(v); flipped.push(`阻力 ${v} → 支撑（低于现价 ${((spot - v) / spot * 100).toFixed(1)}%）`); }
+      else res.push(v);
+    }
+    for (const v of support) {
+      if (v > spot * (1 + FLIP_PCT)) { res.push(v); flipped.push(`支撑 ${v} → 阻力（高于现价 ${((v - spot) / spot * 100).toFixed(1)}%）`); }
+      else sup.push(v);
+    }
+    return {
+      support: [...new Set(sup)].sort((x, y) => x - y),
+      resistance: [...new Set(res)].sort((x, y) => x - y),
+      flipped,
+    };
+  };
+
   const dropped = [];
   // The model sometimes answers with a list where the schema asks for one number
   // ("target": [131.54, 114.99]). Number([a,b]) is NaN, so the old code threw the
@@ -173,13 +217,14 @@ async function extractOne(sym) {
     return candidates[0];
   };
   const proposed = [...(parsed.support || []), ...(parsed.resistance || [])].length;
+  const directed = fixDirection(cleanSupport(parsed.support), cleanResistance(parsed.resistance));
   const levels = {
     symbol: sym,
     from_report: latest.date,
     rating: latest.report.decision ?? null,
     spot_at_extract: spot,
-    support: cleanSupport(parsed.support),
-    resistance: cleanResistance(parsed.resistance),
+    support: directed.support,
+    resistance: directed.resistance,
     stop_loss: keep('stop_loss', parsed.stop_loss),
     target: keep('target', parsed.target),
     extracted_at: nowET,
@@ -188,7 +233,7 @@ async function extractOne(sym) {
   if (proposed > kept) dropped.push(`${proposed - kept} 个越界/重复价位`);
 
   writeFileSync(out, JSON.stringify(levels, null, 2) + '\n');
-  return { sym, levels, dropped };
+  return { sym, levels, dropped, flipped: directed.flipped };
 }
 
 const symbols = only.length
@@ -203,7 +248,8 @@ for (const sym of symbols) {
   const L = r.levels;
   console.log(`${sym}: 支撑 [${L.support.join(', ') || '—'}] 阻力 [${L.resistance.join(', ') || '—'}] `
     + `止损 ${L.stop_loss ?? '—'} 目标 ${L.target ?? '—'}`
-    + (r.dropped.length ? `  ⚠ 丢弃 ${r.dropped.join('、')}` : ''));
+    + (r.dropped.length ? `  ⚠ 丢弃 ${r.dropped.join('、')}` : '')
+    + (r.flipped.length ? `  ↔ 方向修正 ${r.flipped.join('、')}` : ''));
   ok++;
 }
 console.log(`\n完成：${ok} 提取，${skipped} 跳过，${failed} 失败`);

@@ -2,15 +2,15 @@
   "symbol": "MDB",
   "from_report": "2026-09-02",
   "rating": "Hold",
-  "spot_at_extract": null,
+  "spot_at_extract": 388.05,
   "support": [
-    341
+    341,
+    367
   ],
   "resistance": [
-    367,
     418
   ],
   "stop_loss": null,
   "target": null,
-  "extracted_at": "2026-09-02 10:03"
+  "extracted_at": "2026-09-02 10:15"
 }
