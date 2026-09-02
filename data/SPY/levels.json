@@ -1,0 +1,15 @@
+{
+  "symbol": "SPY",
+  "from_report": "2026-09-01",
+  "rating": "Hold",
+  "spot_at_extract": 761.78,
+  "support": [
+    762
+  ],
+  "resistance": [
+    769
+  ],
+  "stop_loss": 754.71,
+  "target": null,
+  "extracted_at": "2026-09-01 23:10"
+}
