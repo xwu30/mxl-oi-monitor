@@ -1,0 +1,16 @@
+{
+  "symbol": "PLTR",
+  "from_report": "2026-09-03",
+  "rating": "Hold",
+  "spot_at_extract": 182.25,
+  "support": [
+    176.82
+  ],
+  "resistance": [
+    187.33,
+    190
+  ],
+  "stop_loss": null,
+  "target": 195,
+  "extracted_at": "2026-09-03 12:58"
+}
