@@ -214,7 +214,7 @@
   </div>
 
   <div class="card" id="shortCard">
-    <h2>做空数据（Short Interest / Utilization / Borrow Rate）</h2>
+    <h2>做空数据（Short Interest）</h2>
     <div class="note" id="shortNote"></div>
     <div class="metrics" id="shortMetrics"></div>
     <div class="panel-title" id="shortHistTitle">空头仓位比例历史（占流通股）</div>
@@ -711,10 +711,13 @@ function renderLevels() {
 
 // ---------- short interest / securities lending ----------
 // data/<SYM>/short.json is rewritten by fetch-short.mjs on the daily run.
-// utilization / borrow_rate are null until a paid lending feed is wired into
-// fetchLending() there; the tiles say so rather than silently disappearing.
+// short.json also carries utilization / borrow_rate, but they are null for every
+// symbol and always will be: securities-lending data comes from EquiLend / FIS
+// Astec and the resellers (Ortex, Fintel) all charge, so fetchLending() returns
+// nulls without making a request. Their two cards used to sit here explaining
+// that; they were two permanent em-dashes taking up half the row, so the cards
+// are gone and the reason lives in fetch-short.mjs's header instead.
 let SHORT = null;
-const LEND_NA = '暂无免费公开数据源 — 借券市场数据来自 EquiLend / FIS Astec，Ortex、Fintel 等转售方均需付费订阅';
 const pctTxt = v => (v == null ? '—' : `${v.toFixed(2)}%`);
 
 function metricCard(k, inner, note, na) {
@@ -754,13 +757,6 @@ function renderShortMetrics() {
         SHORT ? '该标的暂无 FINRA 空头持仓记录' : '等待下一次每日抓取生成', true)
       + metricCard('Days to Cover（空头回补天数）', '<span class="now">—</span>', '同上', true);
   }
-  const util = SHORT && SHORT.utilization, borrow = SHORT && SHORT.borrow_rate;
-  cards += metricCard('Utilization（借券利用率）',
-      `<span class="now">${util == null ? '—' : pctTxt(util)}</span>`,
-      util == null ? LEND_NA : `更新于 ${SHORT.lending_as_of || SHORT.updated_at}`, util == null);
-  cards += metricCard('Borrow Rate（借券利率 / 年化）',
-      `<span class="now">${borrow == null ? '—' : pctTxt(borrow)}</span>`,
-      borrow == null ? LEND_NA : `更新于 ${SHORT.lending_as_of || SHORT.updated_at}`, borrow == null);
   $('shortMetrics').innerHTML = cards;
 }
 
