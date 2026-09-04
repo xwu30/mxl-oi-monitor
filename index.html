@@ -512,6 +512,28 @@ function signedSpan(v) {
   const cls = v > 0 ? 'updn-up' : 'updn-down';
   return `<span class="${cls}">${v > 0 ? '+' : ''}${fmt(v)} ${v > 0 ? '▲' : '▼'}</span>`;
 }
+// Implied volatility, as an expected move rather than a bare number. "iv30 47"
+// means nothing on its own — divided by sqrt(12) it is "the market is pricing a
+// ±13.7% swing over the next 30 days", which is the form you can check a price
+// target against. Deliberately shows no high/low verdict: 74 is cheap for MRNA
+// and alarming for SPY, and that call needs a year of this stock's own history,
+// which only started being recorded on 2026-09-03.
+function ivTile(cur) {
+  const iv = cur.iv30;
+  if (typeof iv !== 'number' || iv <= 0) {
+    return tile('隐含波动率 (30天)', '—', '2026-09-03 起记录，此快照更早');
+  }
+  const move = iv / 100 / Math.sqrt(12);
+  const dollars = typeof cur.spot === 'number'
+    ? `，约 ±$${(cur.spot * move).toLocaleString('en-US', { maximumFractionDigits: 2 })}` : '';
+  const c = cur.iv30_change;
+  const chg = typeof c === 'number' && c !== 0
+    ? ` <span class="${c > 0 ? 'updn-up' : 'updn-down'}">${c > 0 ? '+' : ''}${c.toFixed(2)}</span>`
+    : '';
+  return tile('隐含波动率 (30天)', iv.toFixed(2) + chg,
+    `未来 30 天定价 ±${(move * 100).toFixed(1)}%${dollars}`);
+}
+
 function renderTiles(cur, rows, baseLabel, intra) {
   const [kA, kB, dA, dB] = intra ? ['cv', 'pv', 'dcv', 'dpv'] : ['c', 'p', 'dc', 'dp'];
   const tc = rows.reduce((s, r) => s + r[kA], 0), tp = rows.reduce((s, r) => s + r[kB], 0);
@@ -525,7 +547,8 @@ function renderTiles(cur, rows, baseLabel, intra) {
     tile('正股价', `$${cur.spot}`, chg != null ? `较前收 ${chg > 0 ? '+' : ''}${chg}%` : '') +
     tile(`Call ${name}`, fmt(tc), `Δ ${signedSpan(dtc)}${vs}`) +
     tile(`Put ${name}`, fmt(tp), `Δ ${signedSpan(dtp)}${vs}`) +
-    tile('Put / Call 比', tc > 0 ? (tp / tc).toFixed(2) : '—', intra ? '成交量口径' : 'OI 口径');
+    tile('Put / Call 比', tc > 0 ? (tp / tc).toFixed(2) : '—', intra ? '成交量口径' : 'OI 口径') +
+    ivTile(cur);
   // Keep the ladder's 现价 rung in step with the tile, including when the user
   // switches the date selectors to an older snapshot.
   SPOT = cur.spot;
