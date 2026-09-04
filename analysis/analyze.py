@@ -318,6 +318,70 @@ def _load(path: Path):
         return None
 
 
+# Below this many observations a percentile is noise, not a reading.
+IV_MIN_HISTORY = 20
+# A real IV Rank is measured over a trading year; anything shorter is a window
+# statistic and must say so.
+IV_FULL_HISTORY = 252
+
+
+def iv_lines(root, dates, cur) -> list[str]:
+    """State today's implied volatility, and rank it only once that is honest.
+
+    iv30 is the market's annualised guess at how far this name moves over the
+    next 30 days — the price of insurance on it. Today's number alone is worth
+    stating (it converts to an expected move the agents would otherwise have to
+    guess at), but it is NOT worth judging: 74 is cheap for MRNA and absurd for
+    SPY, and the only way to tell is against the stock's own history.
+
+    We started recording iv30 on 2026-09-03, so for the first months there is no
+    such history. Say that plainly — an agent handed a bare "IV 47.3" will
+    happily assert volatility is elevated, and that assertion is unfounded.
+    """
+    iv = (cur or {}).get("iv30")
+    if not isinstance(iv, (int, float)) or iv <= 0:
+        return []
+
+    out = [f"### 隐含波动率（CBOE iv30，30 天期）"]
+    move = iv / 100 / (12 ** 0.5)
+    spot = cur.get("spot")
+    dollars = f"，约 ±${spot * move:,.2f}" if isinstance(spot, (int, float)) else ""
+    chg = cur.get("iv30_change")
+    chg_txt = f"（较前收 {chg:+.2f}）" if isinstance(chg, (int, float)) else ""
+    out.append(
+        f"- iv30 = {iv:.2f}{chg_txt}，即市场为未来 30 天定价约 ±{move * 100:.1f}% 的波动"
+        f"（1 个标准差{dollars}）"
+    )
+
+    history = []
+    for d in dates:
+        snap = _load(root / f"{d}.json")
+        v = (snap or {}).get("iv30")
+        if isinstance(v, (int, float)) and v > 0:
+            history.append(v)
+    n = len(history)
+    if n < IV_MIN_HISTORY:
+        out.append(
+            f"- ⚠️ 本地 iv30 历史仅 {n} 个交易日（自 2026-09-03 起记录，历史快照无此字段且无法回填），"
+            f"不足以判断当前 IV 偏高还是偏低。**请勿据此断言波动率高/低**，"
+            f"满 {IV_FULL_HISTORY} 个交易日后才会给出 IV Rank。"
+        )
+        return out
+
+    lo, hi = min(history), max(history)
+    rank = 0.0 if hi == lo else (iv - lo) / (hi - lo) * 100
+    pct = sum(1 for v in history if v < iv) / n * 100
+    if n >= IV_FULL_HISTORY:
+        out.append(f"- IV Rank {rank:.0f}（{n} 日区间 {lo:.2f}–{hi:.2f}），IV 百分位 {pct:.0f}")
+    else:
+        out.append(
+            f"- 近 {n} 日区间 {lo:.2f}–{hi:.2f}，当前处于该窗口的 {rank:.0f}%（百分位 {pct:.0f}）。"
+            f"⚠️ 这**不是** IV Rank——窗口只有 {n} 天、不足 {IV_FULL_HISTORY} 天，"
+            f"只反映最近这段时间，不能代表一年的高低位。"
+        )
+    return out
+
+
 def build_local_context(symbol: str) -> str:
     """Summarise this repo's OI + short-interest series as a markdown block.
 
@@ -374,6 +438,10 @@ def build_local_context(symbol: str) -> str:
                 lines.append("- 变化最大的行权价：" + "；".join(
                     f"{side} ${strike} 到期 {exp} {delta:+,}" for delta, side, exp, strike in top
                 ))
+
+        iv_block = iv_lines(root, dates, cur)
+        if iv_block:
+            lines.extend(iv_block)
 
     short = _load(root / "short.json")
     si = (short or {}).get("short_interest")
