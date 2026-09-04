@@ -2,6 +2,7 @@
   "symbol": "SKHY",
   "from_report": "2026-08-14",
   "fired": {
-    "resistance@170": "2026-09-04"
+    "resistance@170": "2026-09-04",
+    "resistance@175.71": "2026-09-04"
   }
 }
