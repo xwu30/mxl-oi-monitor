@@ -52,6 +52,17 @@ async function snapshotSymbol(SYMBOL) {
     fetched_at: json.timestamp,
     spot: d.current_price ?? d.close,
     prev_close: d.prev_day_close,
+    // 30-day implied volatility, i.e. the price of insurance on this name.
+    // CBOE only ever serves today's value, so a day not written down is gone
+    // for good — and IV Rank, the one thing you actually trade off (where does
+    // today's IV sit in this stock's own 252-day range), needs a year of them.
+    // Two floats per symbol per day; the per-contract greeks in the same
+    // response are deliberately still dropped, they would multiply file size by
+    // thousands and can be re-fetched at any time.
+    // iv30_change is absolute, against the prior close; the percent CBOE also
+    // reports is exactly derivable from these two, so it is not stored.
+    iv30: typeof d.iv30 === 'number' ? d.iv30 : null,
+    iv30_change: typeof d.iv30_change === 'number' ? d.iv30_change : null,
     // columns: [expiry, strike, call_oi, put_oi, call_vol, put_vol]
     options,
   };
@@ -61,7 +72,7 @@ async function snapshotSymbol(SYMBOL) {
     const dir = `${root}/intraday/${date}`;
     mkdirSync(dir, { recursive: true });
     writeFileSync(`${dir}/${time}.json`, JSON.stringify({ ...snapshot, time }));
-    console.log(`${SYMBOL}: wrote ${dir}/${time}.json (${options.length} strikes, spot ${snapshot.spot})`);
+    console.log(`${SYMBOL}: wrote ${dir}/${time}.json (${options.length} strikes, spot ${snapshot.spot}, iv30 ${snapshot.iv30 ?? 'n/a'})`);
 
     // Keep only the last 14 calendar days of intraday data.
     const cutoff = new Date(now.getTime() - 14 * 86400_000)
@@ -86,7 +97,7 @@ async function snapshotSymbol(SYMBOL) {
   } else {
     mkdirSync(root, { recursive: true });
     writeFileSync(`${root}/${date}.json`, JSON.stringify(snapshot));
-    console.log(`${SYMBOL}: wrote ${root}/${date}.json (${options.length} strikes, spot ${snapshot.spot})`);
+    console.log(`${SYMBOL}: wrote ${root}/${date}.json (${options.length} strikes, spot ${snapshot.spot}, iv30 ${snapshot.iv30 ?? 'n/a'})`);
 
     // Rebuild the date index from files on disk so it self-heals.
     const dates = readdirSync(root)
