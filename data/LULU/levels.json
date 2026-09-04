@@ -1,0 +1,15 @@
+{
+  "symbol": "LULU",
+  "from_report": "2026-09-03",
+  "rating": "Sell",
+  "spot_at_extract": 99.65,
+  "support": [],
+  "resistance": [
+    112,
+    122,
+    125
+  ],
+  "stop_loss": 125,
+  "target": 85,
+  "extracted_at": "2026-09-03 22:36"
+}

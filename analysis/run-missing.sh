@@ -61,7 +61,11 @@ for symbol in $missing; do
   # still said 08-14, and nothing surfaced the mismatch. Non-fatal: the report is
   # the valuable artifact and must still be committed if this step fails.
   if ! node "$REPO/extract-levels.mjs" "$symbol"; then
-    echo "!! $symbol 价位提取失败，报告照常提交（稍后可单独跑 node extract-levels.mjs $symbol）"
+    # ${symbol} braced, not $symbol: a full-width ）right after the name makes
+    # bash swallow its leading bytes into the identifier, and under set -u the
+    # script then dies *inside the handler that exists to keep it alive* — LULU's
+    # report was written, then thrown away uncommitted because of this line.
+    echo "!! ${symbol} 价位提取失败，报告照常提交（稍后可单独跑 node extract-levels.mjs ${symbol}）"
   fi
 
   git add data
