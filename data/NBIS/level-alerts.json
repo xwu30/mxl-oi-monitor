@@ -1,8 +1,7 @@
 {
   "symbol": "NBIS",
-  "from_report": "2026-08-14",
+  "from_report": "2026-08-28",
   "fired": {
-    "support@215": "2026-08-27",
-    "support@222": "2026-08-27"
+    "resistance@235": "2026-09-08"
   }
 }
