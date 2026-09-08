@@ -48,6 +48,9 @@ jobs:
       # add-symbol.yml did — the working tree lacks whatever the winner just
       # pushed, so that stages their files as deletions.
       #
+      # Exercised by test/intraday-race.sh, which stages a real rejected push in
+      # a sandbox and checks the winner's files survive.
+      #
       # watch-levels re-runs too: it dedupes against the level-alerts.json we
       # just reset to, so the winner's alerts are not re-sent, but a crossing it
       # missed still goes out. Skipping it would drop that alert for good — the
