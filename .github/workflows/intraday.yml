@@ -35,11 +35,51 @@ jobs:
           SERVERCHAN_KEY: ${{ secrets.SERVERCHAN_KEY }}
           WEBHOOK_URL: ${{ secrets.WEBHOOK_URL }}
         run: node watch-levels.mjs
+      # EventBridge and GitHub's own cron are both wired to the same minutes (the
+      # cron is kept as a fallback for when the EventBridge token expires), so
+      # every slot runs twice, seconds apart. Both runs write the same
+      # data/<SYM>/intraday/<date>/HHMM.json and rewrite every index.json, and
+      # `git pull --rebase` then died on the conflict — 2026-09-08 17:20:34 lost
+      # its whole run that way while the 17:20:17 run succeeded.
+      #
+      # Push first and rebase only on rejection: whoever loses the race throws
+      # its own work away, resyncs to the winner's tree, and re-runs the fetch.
+      # Do NOT `reset --mixed` and re-`git add data` the way the first version of
+      # add-symbol.yml did — the working tree lacks whatever the winner just
+      # pushed, so that stages their files as deletions.
+      #
+      # watch-levels re-runs too: it dedupes against the level-alerts.json we
+      # just reset to, so the winner's alerts are not re-sent, but a crossing it
+      # missed still goes out. Skipping it would drop that alert for good — the
+      # next snapshot's "previous" price is already past the level, so nothing
+      # would ever detect the crossing again.
       - name: Commit data
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          WECOM_WEBHOOK: ${{ secrets.WECOM_WEBHOOK }}
+          SERVERCHAN_KEY: ${{ secrets.SERVERCHAN_KEY }}
+          WEBHOOK_URL: ${{ secrets.WEBHOOK_URL }}
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add data
-          git diff --cached --quiet || git commit -m "intraday $(date -u '+%F %H:%M')"
-          git pull --rebase
-          git push
+          for attempt in 1 2 3; do
+            git add data
+            if git diff --cached --quiet; then
+              echo "没有新内容需要提交"
+              exit 0
+            fi
+            git commit -q -m "intraday $(date -u '+%F %H:%M')"
+            if git push -q; then
+              echo "已推送（第 $attempt 次尝试）"
+              exit 0
+            fi
+            echo "推送被并发写入抢先（第 $attempt 次），同步到最新后重抓"
+            git fetch -q origin master
+            git reset -q --hard FETCH_HEAD
+            INTRADAY=1 node fetch.mjs
+            node watch-levels.mjs || true
+            sleep $((attempt * 3))
+          done
+          echo "::error::3 次尝试后仍未能推送盘中快照"
+          exit 1
