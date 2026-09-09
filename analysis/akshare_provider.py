@@ -280,9 +280,35 @@ def margin_summary(symbol: str, days: int = 5) -> str:
     return "\n".join(lines)
 
 
+def _warm_up_v8() -> None:
+    """Start V8 once, from this thread, before anything can race for it.
+
+    Several AkShare endpoints decrypt their payload with py_mini_racer, and
+    TradingAgents runs its four analysts concurrently. Two of them booting V8 at
+    the same moment aborts the whole process — not an exception, a SIGTRAP:
+
+        [FATAL:address_pool_manager.cc(67)] Check failed: !pool->IsInitialized()
+        run-missing.sh: line 50: 74785 Trace/BPT trap: 5
+
+    which killed every attempt at 600703.SS on 2026-09-09. Touching MiniRacer
+    here means the concurrent callers only ever attach to a live runtime.
+
+    Never fatal on its own: if py_mini_racer is missing or fails, the endpoints
+    that need it fail individually, which is far better than refusing to run.
+    """
+    try:
+        from py_mini_racer import MiniRacer
+        MiniRacer().eval("1")
+    except Exception as exc:  # noqa: BLE001 - diagnostic only
+        print(f"[akshare] V8 预热失败（{type(exc).__name__}），"
+              f"依赖 JS 解密的接口可能不稳定")
+
+
 def register() -> None:
     """Add the akshare vendor to the framework's routing table."""
     from tradingagents.dataflows import interface
+
+    _warm_up_v8()
 
     for method, impl in (
         ("get_stock_data", get_stock_data),
