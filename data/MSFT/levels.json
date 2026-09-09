@@ -4,12 +4,10 @@
   "rating": "Overweight",
   "spot_at_extract": 489.1164,
   "support": [
-    454,
-    461
+    457.5
   ],
   "resistance": [
-    491.52,
-    502.5,
+    497.01,
     550,
     720
   ],

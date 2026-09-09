@@ -99,7 +99,8 @@ const PROMPT = `你是金融文本结构化助手。从下面这份股票分析�
 - stop_loss = 明确写作止损、硬止损的价位
 - target = 目标价（Price Target）
 - 只提取报告中明确写出的数字，不要自己推算或臆测
-- 区间如「$88–92阻力区」拆成两个数字都放进 resistance
+- 报告给的是区间时取中间值，只放一个数：「$88–92 阻力区」→ 90，「180-185」→ 182.5。
+  区间两端各放一个会让同一段行情连着触发两次提醒，所以只要中点
 - 报告没提到的字段填 null，数组没有就填 []
 - 所有数字用报告里的原始货币单位，不要换算
 
@@ -154,24 +155,33 @@ async function extractOne(sym) {
   // of spot, 7 pairs less than 1% apart. Merge a cluster down to the boundary
   // crossed first — lowest resistance on the way up, highest support on the way
   // down — so one price move produces one message.
-  const MERGE_PCT = 0.01;
-  const cluster = (values, pick) => {
+  const MERGE_PCT = 0.03;
+  // Chained neighbours could otherwise swallow a whole shelf: 310/314/320/326 are
+  // each under 3% apart, so without a ceiling they collapse into one 5%-wide
+  // "level" that means nothing. Start a new group once the span gets that wide.
+  const GROUP_SPAN_MAX = 0.05;
+  // Midpoint, not the near edge. A band quoted as 180-185 used to become two
+  // levels 2.8% apart and fire twice on one move through it; it is one decision
+  // point, so it gets one number. Alerts land slightly later than they did when
+  // this took the first-crossed boundary — that is the trade being made.
+  const midpoint = g => Math.round(((g[0] + g[g.length - 1]) / 2) * 100) / 100;
+  const cluster = values => {
     const sorted = [...new Set((Array.isArray(values) ? values : []).map(Number).filter(sane))]
       .sort((x, y) => x - y);
     const out = [];
     let group = [];
     for (const v of sorted) {
-      if (group.length && (v - group[group.length - 1]) / group[group.length - 1] > MERGE_PCT) {
-        out.push(pick(group));
-        group = [];
-      }
+      const tooFar = group.length
+        && ((v - group[group.length - 1]) / group[group.length - 1] > MERGE_PCT
+            || (v - group[0]) / group[0] > GROUP_SPAN_MAX);
+      if (tooFar) { out.push(midpoint(group)); group = []; }
       group.push(v);
     }
-    if (group.length) out.push(pick(group));
+    if (group.length) out.push(midpoint(group));
     return out;
   };
-  const cleanResistance = a => cluster(a, g => g[0]);
-  const cleanSupport = a => cluster(a, g => g[g.length - 1]);
+  const cleanResistance = cluster;
+  const cleanSupport = cluster;
 
   // Direction came entirely from the model, and it gets it wrong: MDB's report
   // called the 50-day SMA at 367 "当前价格的直接下方支撑" and said to cut on a
