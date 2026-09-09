@@ -8,10 +8,9 @@
     21.76
   ],
   "resistance": [
-    24.48,
-    25.25
+    25
   ],
-  "stop_loss": 25.25,
+  "stop_loss": null,
   "target": null,
-  "extracted_at": "2026-09-09 15:07"
+  "extracted_at": "2026-09-09 15:12"
 }

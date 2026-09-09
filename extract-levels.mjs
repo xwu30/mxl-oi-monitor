@@ -144,10 +144,24 @@ async function extractOne(sym) {
   // that fires on every tick. Anything outside 0.2x-5x of spot is not a level
   // for this stock — it is a percentage, a share count, or another ticker.
   const spot = spotOf(sym, latest.date);
+  const ungrounded = [];
+  // Every number in the report, so an extracted level can be checked against
+  // what the text actually says. NASA's 2026-09-09 report names no resistance
+  // and no target at all — its one mention of 止损 is a complaint that someone
+  // else's $0.20 stop is too tight — yet extraction returned resistance
+  // [24.48, 25.25] and stop_loss 25.25, none of which appear anywhere in it.
+  // The prompt already says 只提取报告中明确写出的数字; it is not enough.
+  const quoted = (text.match(/\d+(?:\.\d+)?/g) || []).map(Number).filter(Number.isFinite);
+  // Loose match: the same level shows up as 24.5 / 24.50 / $24.5, and a price
+  // rounded in one sentence and exact in another is still the same level.
+  const grounded = v => quoted.some(q => Math.abs(q - v) <= Math.max(v * 0.001, 0.005));
+
   const sane = n => {
     const v = Number(n);
     if (!Number.isFinite(v) || v <= 0) return false;
-    return spot ? v >= spot * 0.2 && v <= spot * 5 : true;
+    if (spot && !(v >= spot * 0.2 && v <= spot * 5)) return false;
+    if (!grounded(v)) { ungrounded.push(v); return false; }
+    return true;
   };
   // Reports state the same level twice at slightly different precision
   // ("513 和 513.73", "234 和 234.19") and stack a dozen within a few percent.
@@ -240,6 +254,7 @@ async function extractOne(sym) {
     extracted_at: nowET,
   };
   const kept = levels.support.length + levels.resistance.length;
+  if (ungrounded.length) dropped.push(`${[...new Set(ungrounded)].join('、')} 报告里查无此数（疑似模型编造）`);
   if (proposed > kept) dropped.push(`${proposed - kept} 个越界/重复价位`);
 
   writeFileSync(out, JSON.stringify(levels, null, 2) + '\n');
