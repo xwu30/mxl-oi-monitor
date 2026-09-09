@@ -1,0 +1,15 @@
+{
+  "symbol": "DRAM",
+  "from_report": "2026-09-09",
+  "rating": "Hold",
+  "spot_at_extract": 61.5,
+  "support": [
+    58.5
+  ],
+  "resistance": [
+    66.5
+  ],
+  "stop_loss": 55.5,
+  "target": null,
+  "extracted_at": "2026-09-09 14:53"
+}
