@@ -286,7 +286,7 @@ const $ = id => document.getElementById(id);
 const fmt = n => n.toLocaleString('en-US');
 const hm = t => t.slice(0, 2) + ':' + t.slice(2);
 const cache = new Map();
-let INDEX = null, INTRA = null, SYM = null, SYMBOLS = [], NAMES = {};
+let INDEX = null, INTRA = null, SYM = null, SYMBOLS = [], NAMES = {}, FULL = {};
 // Latest rendered spot. The ladder needs it to place the "现价" rung, and the
 // snapshot it comes from is a local inside render().
 let SPOT = null;
@@ -943,7 +943,7 @@ async function loadSymbolData() {
   }
   if (!INDEX) {
     setOptionsUI(false);
-    $('pageTitle').textContent = `${symLabel(SYM)} 分析`;
+    $('pageTitle').textContent = `${symHeading(SYM)} 分析`;
     document.title = `${symLabel(SYM)} 分析`;
     $('subline').textContent = `${symLabel(SYM)} · 非美股标的，无期权持仓数据，仅显示 AI 分析`;
     SHORT = null;
@@ -964,7 +964,7 @@ async function loadSymbolData() {
   const cur = await loadSnap(latest);
   const expiries = [...new Set(cur.options.map(o => o[0]))].sort();
   fillSelect($('selExp'), [['ALL', '全部到期日'], ...expiries.map(e => [e, e])], expiries[0]);
-  $('pageTitle').textContent = `${symLabel(SYM)} 期权未平仓量（OI）监控`;
+  $('pageTitle').textContent = `${symHeading(SYM)} 期权未平仓量（OI）监控`;
   document.title = `${symLabel(SYM)} 期权 OI 监控`;
   // Short interest is a per-symbol side panel; a missing file must not stop the
   // OI view from rendering (a freshly added symbol has none until the next run).
@@ -978,6 +978,13 @@ async function loadSymbolData() {
 // A-shares carry a Chinese name in symbols.json; US tickers have none and read
 // fine on their own.
 const symLabel = sym => (NAMES[sym] ? `${sym} ${NAMES[sym]}` : sym);
+// Heading has room for the full name; the tab strip does not.
+const symHeading = sym => {
+  const parts = [sym];
+  if (NAMES[sym]) parts.push(NAMES[sym]);
+  if (FULL[sym] && FULL[sym] !== NAMES[sym]) parts.push(`(${FULL[sym]})`);
+  return parts.join(' ');
+};
 
 // Tabs, alphabetical. symbols.json keeps its own append order because the
 // fetch scripts iterate it; only the display copy is sorted.
@@ -987,6 +994,10 @@ function renderTabs() {
   for (const sym of SYMBOLS) {
     const tab = document.createElement('button');
     tab.className = 'symtab' + (sym === SYM ? ' on' : '');
+    // Full company name on hover only. Printing it in the tab would push 41
+    // pills from three rows to eight and make the strip harder to scan than
+    // plain tickers were; the short Chinese name below is what earns its space.
+    if (FULL[sym]) tab.title = FULL[sym];
     tab.append(sym);
     if (NAMES[sym]) {
       const cn = document.createElement('span');
@@ -1026,6 +1037,7 @@ async function init() {
   SYMBOLS = cfg.symbols.slice().sort((a, b) =>
     alpha(a) === alpha(b) ? a.localeCompare(b, 'en') : (alpha(a) ? -1 : 1));
   NAMES = cfg.names || {};
+  FULL = cfg.full_names || {};
   const hash = location.hash.replace('#', '').toUpperCase();
   SYM = SYMBOLS.includes(hash) ? hash : SYMBOLS[0];
   renderTabs();
