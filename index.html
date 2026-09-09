@@ -704,8 +704,12 @@ function renderLevels() {
   }).join('');
 
   const rating = LEVELS.rating ? `${LEVELS.rating} · ` : '';
-  $('levelsNote').innerHTML = `${rating}取自 ${LEVELS.from_report} 的 AI 报告原文`
-    + `（阻力 = 上方压力，支撑 = 下方承接）。`
+  // "原文" stopped being true once extract-levels started collapsing a quoted
+  // band to its midpoint: a report saying "180-185 阻力区" now shows 181.5, a
+  // number that appears nowhere in it. Say what these actually are.
+  $('levelsNote').innerHTML = `${rating}取自 ${LEVELS.from_report} 的 AI 报告`
+    + `（阻力 = 上方压力，支撑 = 下方承接；报告给的是区间时取中点，`
+    + `所以这里的数字可能不是报告里的原话）。`
     + `<b>报告结论未经回测验证</b>，价位仅供对照，非买卖建议。`;
 }
 
