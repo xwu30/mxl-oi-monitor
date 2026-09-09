@@ -1,0 +1,16 @@
+{
+  "symbol": "600703.SS",
+  "from_report": "2026-09-09",
+  "rating": "Hold",
+  "spot_at_extract": null,
+  "support": [
+    12.3
+  ],
+  "resistance": [
+    13.81,
+    14.82
+  ],
+  "stop_loss": null,
+  "target": null,
+  "extracted_at": "2026-09-09 15:23"
+}
