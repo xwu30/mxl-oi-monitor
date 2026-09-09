@@ -486,6 +486,19 @@ def run_symbol(symbol: str, trade_date: str, depth: str, use_local: bool) -> dic
         config["quick_think_llm"] = quick_model
     config["max_debate_rounds"] = debate_rounds
     config["max_risk_discuss_rounds"] = risk_rounds
+    # Pin sampling so a changed conclusion means something. Without this the
+    # framework leaves temperature unset and each provider uses its own default,
+    # so re-running the same symbol on the same day and the same data could come
+    # back Hold instead of Underweight — and there would be no way to tell that
+    # from the market having actually moved, or from a model swap. We have been
+    # swapping models every few reports as free quotas run out; without a fixed
+    # temperature none of those reports are comparable to each other.
+    #
+    # Not a determinism guarantee: MoE routing and server-side batching still
+    # make identical output unlikely. It removes the sampling noise, not all of
+    # it. TRADINGAGENTS_TEMPERATURE still wins if it is set explicitly.
+    if config.get("temperature") in (None, ""):
+        config["temperature"] = 0
     config["output_language"] = os.getenv("TRADINGAGENTS_OUTPUT_LANGUAGE", "Chinese")
     config["results_dir"] = str(HERE / "reports")
     # yfinance's news endpoint returns nothing as of 2026-08; Alpha Vantage's
