@@ -140,6 +140,44 @@ def patch_invalid_tool_dates() -> None:
 BEARISH_RATINGS = {"underweight", "sell", "strong sell", "reduce"}
 
 
+def patch_dead_macro_tool() -> None:
+    """Answer the macro tool once, finally, when there is no key behind it.
+
+    get_macro_indicators needs FRED_API_KEY. Without one the router says
+    "Optional macro_data unavailable ... not set" and the agent, reading that as
+    a transient miss, calls it again. NKE 2026-09-09 did this 65 times and died
+    on LangGraph's 100-step recursion limit having produced no report.
+
+    The retry storm is not new — sampling noise used to knock the agent onto a
+    different action after a few tries. Pinning temperature to 0 removed that
+    escape hatch, so a tool that always fails now loops forever. Fixing the
+    prompt-level answer is the right layer: a definitive "unavailable, stop
+    asking" ends it whatever the temperature.
+
+    With a key set this patch does nothing and the real vendor is used.
+    """
+    if os.getenv("FRED_API_KEY"):
+        return
+
+    import tradingagents.dataflows.interface as interface
+
+    original = interface.route_to_vendor
+    if getattr(original, "_macro_short_circuited", False):
+        return
+
+    def routed(method, *args, **kwargs):
+        if method == "get_macro_indicators":
+            return ("宏观指标数据不可用：本次运行未配置 FRED_API_KEY。"
+                    "这是确定性的，重试不会有不同结果——请不要再调用此工具，"
+                    "改用报告中其他部分已有的利率与宏观信息继续分析。")
+        return original(method, *args, **kwargs)
+
+    routed._macro_short_circuited = True
+    for module in list(sys.modules.values()):
+        if getattr(module, "route_to_vendor", None) is original:
+            module.route_to_vendor = routed
+
+
 def patch_outcome_sign() -> None:
     """Log a realized return from the position's side, not the stock's.
 
@@ -472,6 +510,7 @@ def run_symbol(symbol: str, trade_date: str, depth: str, use_local: bool) -> dic
     from tradingagents.graph.trading_graph import TradingAgentsGraph
 
     patch_invalid_tool_dates()
+    patch_dead_macro_tool()
     patch_outcome_sign()
     patch_reflection_verdict()
 
