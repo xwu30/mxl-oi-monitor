@@ -2,6 +2,7 @@
   "symbol": "QCOM",
   "from_report": "2026-09-08",
   "fired": {
-    "resistance@180": "2026-09-09"
+    "resistance@180": "2026-09-09",
+    "resistance@181.5": "2026-09-10"
   }
 }
