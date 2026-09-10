@@ -69,7 +69,6 @@
   }
   .symtab:hover { background: var(--tile); color: var(--ink); }
   .symtab.on { background: var(--ink); color: var(--page); border-color: var(--ink); font-weight: 600; }
-  .symtab .cn { font-size: 12px; opacity: .72; font-weight: 400; }
   .symtab.add { border-style: dashed; color: var(--muted); }
   .symtabs .count { align-self: center; color: var(--muted); font-size: 12px; margin-left: 2px; }
   .filters { display: flex; flex-wrap: wrap; gap: 12px; align-items: end; margin: 14px 0; }
@@ -995,13 +994,10 @@ function renderTabs() {
     // pills from three rows to eight and make the strip harder to scan than
     // plain tickers were; the short Chinese name below is what earns its space.
     if (FULL[sym]) tab.title = FULL[sym];
-    tab.append(sym);
-    if (NAMES[sym]) {
-      const cn = document.createElement('span');
-      cn.className = 'cn';
-      cn.textContent = NAMES[sym];
-      tab.append(cn);
-    }
+    // symLabel, not sym + name: a name REPLACES the ticker. This line used to
+    // append both and kept showing "600703.SS 三安光电" long after symLabel was
+    // changed, because the tab strip built its own label and never called it.
+    tab.append(symLabel(sym));
     tab.addEventListener('click', () => selectSymbol(sym));
     box.append(tab);
   }
