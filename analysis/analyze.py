@@ -167,12 +167,64 @@ def patch_dead_macro_tool() -> None:
 
     def routed(method, *args, **kwargs):
         if method == "get_macro_indicators":
-            return ("宏观指标数据不可用：本次运行未配置 FRED_API_KEY。"
-                    "这是确定性的，重试不会有不同结果——请不要再调用此工具，"
-                    "改用报告中其他部分已有的利率与宏观信息继续分析。")
+            # Name the one dead tool and point at the live ones. The first
+            # wording ended with 「请不要再调用此工具」and NKE came back with an
+            # empty news section — 14 characters of echoed prompt — where every
+            # other report has ~3,700. One sample, so not proof, but a model
+            # reading a bare "stop calling tools" as "stop calling tools" is
+            # exactly the failure that would produce it.
+            return ("get_macro_indicators 不可用：本次运行未配置 FRED_API_KEY，"
+                    "该接口确定性失败，重复调用它不会有不同结果。"
+                    "其余工具全部正常，请继续用 get_news、get_global_news、"
+                    "get_prediction_markets 完成这份分析。")
         return original(method, *args, **kwargs)
 
     routed._macro_short_circuited = True
+    for module in list(sys.modules.values()):
+        if getattr(module, "route_to_vendor", None) is original:
+            module.route_to_vendor = routed
+
+
+def patch_none_tool_args() -> None:
+    """Fill in the defaults the tool signature promises but the vendor ignores.
+
+    get_global_news declares
+        look_back_days: int | None = None  # "omit to use the configured default"
+    and the agents do omit it. The alpha_vantage vendor then hands that None
+    straight to timedelta(days=None) and the run dies:
+
+        Vendor 'alpha_vantage' failed for get_global_news:
+        unsupported type for timedelta days component: NoneType
+
+    The defaults it was supposed to inherit are right there in DEFAULT_CONFIG
+    (global_news_lookback_days=7, global_news_article_limit=10), so substitute
+    them here rather than teach every agent to always pass the argument.
+
+    Latent all along — it only needs the model to omit one optional argument —
+    but it took NKE 2026-09-09 to hit it, because pinning temperature removed
+    the variation that used to paper over calls like this.
+    """
+    from tradingagents.default_config import DEFAULT_CONFIG
+    import tradingagents.dataflows.interface as interface
+
+    original = interface.route_to_vendor
+    if getattr(original, "_none_args_filled", False):
+        return
+
+    # (method, positional index) -> config key holding the documented default.
+    FILL = {
+        ("get_global_news", 1): "global_news_lookback_days",
+        ("get_global_news", 2): "global_news_article_limit",
+    }
+
+    def routed(method, *args, **kwargs):
+        args = list(args)
+        for (m, i), key in FILL.items():
+            if m == method and len(args) > i and args[i] is None:
+                args[i] = DEFAULT_CONFIG.get(key)
+        return original(method, *args, **kwargs)
+
+    routed._none_args_filled = True
     for module in list(sys.modules.values()):
         if getattr(module, "route_to_vendor", None) is original:
             module.route_to_vendor = routed
@@ -511,6 +563,7 @@ def run_symbol(symbol: str, trade_date: str, depth: str, use_local: bool) -> dic
 
     patch_invalid_tool_dates()
     patch_dead_macro_tool()
+    patch_none_tool_args()
     patch_outcome_sign()
     patch_reflection_verdict()
 
@@ -533,11 +586,20 @@ def run_symbol(symbol: str, trade_date: str, depth: str, use_local: bool) -> dic
     # swapping models every few reports as free quotas run out; without a fixed
     # temperature none of those reports are comparable to each other.
     #
-    # Not a determinism guarantee: MoE routing and server-side batching still
-    # make identical output unlikely. It removes the sampling noise, not all of
-    # it. TRADINGAGENTS_TEMPERATURE still wins if it is set explicitly.
+    # 0.2 rather than 0, learned the hard way. A hard 0 made qwen-max loop: the
+    # news analyst node only finishes on a turn with no tool calls, and greedy
+    # decoding re-issued the same tool call until LangGraph's 100-step limit
+    # killed the run. NKE 2026-09-09 failed that way twice, and the same pin
+    # turned a tool that merely retried too much into one that retried forever.
+    # A little sampling noise is what lets an agent fall out of a rut; removing
+    # all of it trades occasional incomparability for occasional total failure,
+    # which is the worse deal. 0.2 is low enough that conclusions stay stable.
+    #
+    # Not a determinism guarantee either way: MoE routing and server-side
+    # batching still make identical output unlikely. TRADINGAGENTS_TEMPERATURE
+    # still wins if it is set explicitly.
     if config.get("temperature") in (None, ""):
-        config["temperature"] = 0
+        config["temperature"] = 0.2
     config["output_language"] = os.getenv("TRADINGAGENTS_OUTPUT_LANGUAGE", "Chinese")
     config["results_dir"] = str(HERE / "reports")
     # yfinance's news endpoint returns nothing as of 2026-08; Alpha Vantage's
