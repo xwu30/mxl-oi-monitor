@@ -943,7 +943,7 @@ async function loadSymbolData() {
   }
   if (!INDEX) {
     setOptionsUI(false);
-    $('pageTitle').textContent = `${symHeading(SYM)} 分析`;
+    $('pageTitle').textContent = `${symLabel(SYM)} 分析`;
     document.title = `${symLabel(SYM)} 分析`;
     $('subline').textContent = `${symLabel(SYM)} · 非美股标的，无期权持仓数据，仅显示 AI 分析`;
     SHORT = null;
@@ -964,7 +964,7 @@ async function loadSymbolData() {
   const cur = await loadSnap(latest);
   const expiries = [...new Set(cur.options.map(o => o[0]))].sort();
   fillSelect($('selExp'), [['ALL', '全部到期日'], ...expiries.map(e => [e, e])], expiries[0]);
-  $('pageTitle').textContent = `${symHeading(SYM)} 期权未平仓量（OI）监控`;
+  $('pageTitle').textContent = `${symLabel(SYM)} 期权未平仓量（OI）监控`;
   document.title = `${symLabel(SYM)} 期权 OI 监控`;
   // Short interest is a per-symbol side panel; a missing file must not stop the
   // OI view from rendering (a freshly added symbol has none until the next run).
@@ -975,16 +975,13 @@ async function loadSymbolData() {
   setupModeSelectors();
 }
 
-// A-shares carry a Chinese name in symbols.json; US tickers have none and read
-// fine on their own.
-const symLabel = sym => (NAMES[sym] ? `${sym} ${NAMES[sym]}` : sym);
-// Heading has room for the full name; the tab strip does not.
-const symHeading = sym => {
-  const parts = [sym];
-  if (NAMES[sym]) parts.push(NAMES[sym]);
-  if (FULL[sym] && FULL[sym] !== NAMES[sym]) parts.push(`(${FULL[sym]})`);
-  return parts.join(' ');
-};
+// A name in symbols.json REPLACES the ticker rather than appending to it. Only
+// the A-shares carry one: "600703.SS" is not how anyone refers to 三安光电, so
+// showing both just wastes the tab. US tickers are already the common name.
+const symLabel = sym => NAMES[sym] || sym;
+// The English company name lives only in the tab's hover title. It is not in
+// the heading: a US ticker read exactly like this before names existed, and
+// this change is meant to touch nothing but the A-shares.
 
 // Tabs, alphabetical. symbols.json keeps its own append order because the
 // fetch scripts iterate it; only the display copy is sorted.
