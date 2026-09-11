@@ -70,6 +70,8 @@
   .symtab:hover { background: var(--tile); color: var(--ink); }
   .symtab.on { background: var(--ink); color: var(--page); border-color: var(--ink); font-weight: 600; }
   .symtab.add { border-style: dashed; color: var(--muted); }
+  .symtab.cal { border-style: dashed; }
+  .symtab.cal.on { border-style: solid; }
   .symtabs .count { align-self: center; color: var(--muted); font-size: 12px; margin-left: 2px; }
   .filters { display: flex; flex-wrap: wrap; gap: 12px; align-items: end; margin: 14px 0; }
   .filters label { display: block; color: var(--muted); font-size: 12px; margin-bottom: 3px; }
@@ -206,22 +208,14 @@
 
   <div class="symtabs" id="symTabs"></div>
 
+  <div id="symbolView">
+
   <div class="tiles" id="tiles"></div>
 
   <div class="card" id="levelsCard" style="display:none">
     <h2>报告价位（支撑 / 阻力）</h2>
     <div class="note" id="levelsNote"></div>
     <div class="ladder" id="ladder"></div>
-  </div>
-
-  <div class="card" id="ernCard" style="display:none">
-    <div class="ern-head">
-      <h2>财报日历</h2>
-      <span class="note" id="ernNote"></span>
-      <span style="flex:1"></span>
-      <button class="ern-toggle" id="ernToggle">只看我关注的</button>
-    </div>
-    <div id="ernBody"></div>
   </div>
 
   <div class="filters">
@@ -286,6 +280,21 @@
     <div class="note" id="tableNote"></div>
     <div class="tablewrap" id="tableBox"></div>
   </div>
+
+  </div><!-- /symbolView -->
+
+  <div id="calendarView" style="display:none">
+  <div class="card" id="ernCard" style="display:none">
+    <div class="ern-head">
+      <h2>财报日历</h2>
+      <span class="note" id="ernNote"></span>
+      <span style="flex:1"></span>
+      <button class="ern-toggle" id="ernToggle">只看我关注的</button>
+    </div>
+    <div id="ernBody"></div>
+  </div>
+
+  </div><!-- /calendarView -->
 
   <footer>
     数据来源：CBOE 延迟行情（免费公开接口，约延迟 15 分钟）。OI 由 OCC 每个交易日早间更新，反映上一交易日收盘后的持仓，
@@ -754,6 +763,27 @@ function renderLevels() {
 // data/earnings.json is rewritten by fetch-earnings.mjs on the daily run. It is
 // market-wide, not per-symbol, so it loads once and never reloads on tab switch.
 let ERN = null, EVT = null, ERN_MINE_ONLY = true;
+// Which half of the page is showing. The calendar is market-wide, so it does
+// not belong under a symbol tab — it gets its own.
+let VIEW = 'symbol';
+
+function showView(v) {
+  VIEW = v;
+  $('symbolView').style.display = v === 'symbol' ? '' : 'none';
+  $('calendarView').style.display = v === 'calendar' ? '' : 'none';
+  if (v === 'calendar') {
+    $('pageTitle').textContent = '财报与宏观事件日历';
+    document.title = '财报与宏观事件日历';
+    $('subline').textContent = ERN
+      ? `${ERN.from} → ${ERN.to} · 全市场财报与美国宏观数据`
+      : '加载中…';
+    // Loaded lazily so the symbol view is never held up by it.
+    if (!ERN) loadEarnings();
+  } else {
+    render();
+  }
+  renderTabs();
+}
 
 const ernCap = n => (!n ? '' : n >= 1e12 ? `$${(n / 1e12).toFixed(1)}T`
   : n >= 1e9 ? `$${Math.round(n / 1e9)}B` : `$${Math.round(n / 1e6)}M`);
@@ -765,6 +795,7 @@ async function loadEarnings() {
   try { EVT = await loadJSON(fresh('data/events.json')); } catch { EVT = null; }
   if (!ERN || !ERN.rows || !ERN.rows.length) return;
   $('ernCard').style.display = '';
+  $('subline').textContent = `${ERN.from} → ${ERN.to} · 全市场财报与美国宏观数据`;
   $('ernToggle').addEventListener('click', () => {
     ERN_MINE_ONLY = !ERN_MINE_ONLY;
     renderEarnings();
@@ -1124,7 +1155,7 @@ function renderTabs() {
   box.textContent = '';
   for (const sym of SYMBOLS) {
     const tab = document.createElement('button');
-    tab.className = 'symtab' + (sym === SYM ? ' on' : '');
+    tab.className = 'symtab' + (sym === SYM && VIEW === 'symbol' ? ' on' : '');
     // Full company name on hover only. Printing it in the tab would push 41
     // pills from three rows to eight and make the strip harder to scan than
     // plain tickers were; the short Chinese name below is what earns its space.
@@ -1133,9 +1164,18 @@ function renderTabs() {
     // append both and kept showing "600703.SS 三安光电" long after symLabel was
     // changed, because the tab strip built its own label and never called it.
     tab.append(symLabel(sym));
-    tab.addEventListener('click', () => selectSymbol(sym));
+    tab.addEventListener('click', () => {
+      if (VIEW !== 'symbol') showView('symbol');
+      selectSymbol(sym);
+    });
     box.append(tab);
   }
+  const cal = document.createElement('button');
+  cal.className = 'symtab cal' + (VIEW === 'calendar' ? ' on' : '');
+  cal.textContent = '📅 财报与事件';
+  cal.title = '全市场财报日期与美国宏观数据发布';
+  cal.addEventListener('click', () => showView('calendar'));
+  box.append(cal);
   const add = document.createElement('button');
   add.className = 'symtab add';
   add.textContent = '➕ 添加';
@@ -1183,8 +1223,6 @@ async function init() {
   });
   await loadSymbolData();
   await render();
-  // After the symbol view: this is reference data, not what the page is for.
-  loadEarnings();
 }
 // ---------- add symbol (dispatches the Add symbol GitHub workflow) ----------
 const REPO = 'xwu30/mxl-oi-monitor';
