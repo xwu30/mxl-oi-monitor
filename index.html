@@ -157,6 +157,17 @@
     .ern-row { grid-template-columns: 66px 1fr 44px; }
     .ern-row .cap, .ern-row .eps { display: none; }
   }
+  /* Macro releases share the earnings timeline: what matters is what happens on
+     a given day, not which feed it came from. Kept visually separate so the two
+     never read as the same kind of thing. */
+  .ern-macro { display: grid; grid-template-columns: 74px 1fr auto; gap: 8px;
+               align-items: baseline; padding: 4px 6px; border-radius: 6px; font-size: 13px;
+               background: rgba(42,120,214,0.08); }
+  .ern-macro .tm { font-size: 12px; color: var(--ink-2); font-variant-numeric: tabular-nums; }
+  .ern-macro .ev { font-weight: 600; }
+  .ern-macro.mid { background: transparent; }
+  .ern-macro.mid .ev { font-weight: 400; color: var(--ink-2); }
+  .ern-macro .fig { font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
   .metric { background: var(--tile); border-radius: 10px; padding: 12px 14px; }
   .metric .mk { font-size: 12px; color: var(--muted); }
   .metric .mv { display: flex; align-items: baseline; flex-wrap: wrap; gap: 7px; margin-top: 3px; font-variant-numeric: tabular-nums; }
@@ -742,13 +753,16 @@ function renderLevels() {
 // ---------- earnings calendar ----------
 // data/earnings.json is rewritten by fetch-earnings.mjs on the daily run. It is
 // market-wide, not per-symbol, so it loads once and never reloads on tab switch.
-let ERN = null, ERN_MINE_ONLY = true;
+let ERN = null, EVT = null, ERN_MINE_ONLY = true;
 
 const ernCap = n => (!n ? '' : n >= 1e12 ? `$${(n / 1e12).toFixed(1)}T`
   : n >= 1e9 ? `$${Math.round(n / 1e9)}B` : `$${Math.round(n / 1e6)}M`);
 
 async function loadEarnings() {
   try { ERN = await loadJSON(fresh('data/earnings.json')); } catch { ERN = null; }
+  // Macro releases are optional: a missing events.json must not hide the
+  // earnings list, and vice versa.
+  try { EVT = await loadJSON(fresh('data/events.json')); } catch { EVT = null; }
   if (!ERN || !ERN.rows || !ERN.rows.length) return;
   $('ernCard').style.display = '';
   $('ernToggle').addEventListener('click', () => {
@@ -773,25 +787,44 @@ function renderEarnings() {
     + `${ERN_MINE_ONLY ? '' : ` · 全部视图含市值 ≥ ${ernCap(ERN.min_market_cap)} 的公司，`
         + `以及你关注的标的（不论市值）`}`;
 
+  // Macro releases are market-wide, so they show in both views — filtering to
+  // "my symbols" is about which companies report, not about whether CPI lands.
+  const macro = (EVT && EVT.rows) || [];
   const byDate = new Map();
-  for (const r of rows) {
-    if (!byDate.has(r[0])) byDate.set(r[0], []);
-    byDate.get(r[0]).push(r);
-  }
+  const bucket = d => { if (!byDate.has(d)) byDate.set(d, { macro: [], ern: [] }); return byDate.get(d); };
+  for (const r of macro) bucket(r[0]).macro.push(r);
+  for (const r of rows) bucket(r[0]).ern.push(r);
+  const dates = [...byDate.keys()].sort();
   const box = $('ernBody');
   box.textContent = '';
   if (!byDate.size) {
-    box.innerHTML = '<div class="msg">这段时间没有财报</div>';
+    box.innerHTML = '<div class="msg">这段时间没有财报或宏观事件</div>';
     return;
   }
-  for (const [date, list] of byDate) {
+  for (const date of dates) {
+    const { macro: macroList, ern: list } = byDate.get(date);
     const day = document.createElement('div');
     day.className = 'ern-day';
     const head = document.createElement('div');
     head.className = 'ern-date';
     const wd = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'][new Date(`${date}T12:00:00Z`).getUTCDay()];
-    head.textContent = `${date} ${wd}${date === TODAY ? ' · 今天' : ''}   ${list.length} 场`;
+    const bits = [];
+    if (macroList.length) bits.push(`${macroList.length} 项数据`);
+    if (list.length) bits.push(`${list.length} 场财报`);
+    head.textContent = `${date} ${wd}${date === TODAY ? ' · 今天' : ''}   ${bits.join(' · ')}`;
     day.append(head);
+    // Macro first: it sets the tape everything else trades against.
+    for (const [, tm, name, tier, cons, prev] of macroList) {
+      const row = document.createElement('div');
+      row.className = 'ern-macro' + (tier === 'mid' ? ' mid' : '');
+      const t = document.createElement('span'); t.className = 'tm';
+      t.textContent = tm ? `${tm} ET` : '';
+      const ev = document.createElement('span'); ev.className = 'ev'; ev.textContent = name;
+      const fig = document.createElement('span'); fig.className = 'fig';
+      fig.textContent = [cons ? `预期 ${cons}` : '', prev ? `前值 ${prev}` : ''].filter(Boolean).join(' · ');
+      row.append(t, ev, fig);
+      day.append(row);
+    }
     for (const r of list) {
       const [d, sym, name, slotv, cap, eps, , isMine] = r;
       const row = document.createElement('div');

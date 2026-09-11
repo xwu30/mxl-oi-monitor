@@ -36,6 +36,12 @@ jobs:
         continue-on-error: true
         run: node fetch-earnings.mjs
 
+      # CPI / PPI / PCE / FOMC and friends. Consensus figures move right up to
+      # the release, so a stale calendar is worse than a re-fetch.
+      - name: Fetch macro events
+        continue-on-error: true
+        run: node fetch-events.mjs
+
       # Runs on the freshly written snapshots but before the commit, so a failed
       # push never costs us the data. Skips itself when no channel secret is
       # set, so the job stays green until one is chosen.
