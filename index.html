@@ -768,7 +768,10 @@ function renderEarnings() {
   $('ernNote').textContent =
     `${ERN.from} → ${ERN.to}（${ERN.trading_days} 个交易日）· 全市场 ${all.length} 场，`
     + `其中关注的 ${mine.length} 场 · 抓取于 ${ERN.fetched_at}`
-    + `${ERN_MINE_ONLY ? '' : ` · 全部视图仅含市值 ≥ ${ernCap(ERN.min_market_cap)} 的公司`}`;
+    // "仅含 ≥100亿" was wrong: watched names are kept whatever their size, and
+    // MXL ($6.5B) is in the list precisely because of that exception.
+    + `${ERN_MINE_ONLY ? '' : ` · 全部视图含市值 ≥ ${ernCap(ERN.min_market_cap)} 的公司，`
+        + `以及你关注的标的（不论市值）`}`;
 
   const byDate = new Map();
   for (const r of rows) {
