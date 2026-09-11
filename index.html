@@ -140,6 +140,23 @@
   @media (max-width: 560px) {
     .rung { grid-template-columns: 48px 78px 62px 1fr; gap: 6px; padding: 5px 6px; }
   }
+  /* Earnings calendar: cross-symbol, so it sits outside the per-symbol cards. */
+  .ern-head { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+  .ern-toggle { font-size: 12px; padding: 3px 10px; }
+  .ern-day { margin-top: 12px; }
+  .ern-date { font-size: 12px; font-weight: 600; color: var(--ink-2); border-bottom: 1px solid var(--grid); padding-bottom: 3px; }
+  .ern-row { display: grid; grid-template-columns: 74px 1fr 46px 84px 74px; gap: 8px;
+             align-items: baseline; padding: 4px 6px; border-radius: 6px; font-size: 13px; }
+  .ern-row.mine { background: var(--tile); }
+  .ern-row .sym { font-weight: 600; }
+  .ern-row.mine .sym { cursor: pointer; text-decoration: underline; text-underline-offset: 2px; }
+  .ern-row .nm { color: var(--ink-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .ern-row .slot, .ern-row .cap, .ern-row .eps { font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
+  .ern-row .cap, .ern-row .eps { text-align: right; }
+  @media (max-width: 620px) {
+    .ern-row { grid-template-columns: 66px 1fr 44px; }
+    .ern-row .cap, .ern-row .eps { display: none; }
+  }
   .metric { background: var(--tile); border-radius: 10px; padding: 12px 14px; }
   .metric .mk { font-size: 12px; color: var(--muted); }
   .metric .mv { display: flex; align-items: baseline; flex-wrap: wrap; gap: 7px; margin-top: 3px; font-variant-numeric: tabular-nums; }
@@ -184,6 +201,16 @@
     <h2>报告价位（支撑 / 阻力）</h2>
     <div class="note" id="levelsNote"></div>
     <div class="ladder" id="ladder"></div>
+  </div>
+
+  <div class="card" id="ernCard" style="display:none">
+    <div class="ern-head">
+      <h2>财报日历</h2>
+      <span class="note" id="ernNote"></span>
+      <span style="flex:1"></span>
+      <button class="ern-toggle" id="ernToggle">只看我关注的</button>
+    </div>
+    <div id="ernBody"></div>
   </div>
 
   <div class="filters">
@@ -712,6 +739,78 @@ function renderLevels() {
     + `<b>报告结论未经回测验证</b>，价位仅供对照，非买卖建议。`;
 }
 
+// ---------- earnings calendar ----------
+// data/earnings.json is rewritten by fetch-earnings.mjs on the daily run. It is
+// market-wide, not per-symbol, so it loads once and never reloads on tab switch.
+let ERN = null, ERN_MINE_ONLY = true;
+
+const ernCap = n => (!n ? '' : n >= 1e12 ? `$${(n / 1e12).toFixed(1)}T`
+  : n >= 1e9 ? `$${Math.round(n / 1e9)}B` : `$${Math.round(n / 1e6)}M`);
+
+async function loadEarnings() {
+  try { ERN = await loadJSON(fresh('data/earnings.json')); } catch { ERN = null; }
+  if (!ERN || !ERN.rows || !ERN.rows.length) return;
+  $('ernCard').style.display = '';
+  $('ernToggle').addEventListener('click', () => {
+    ERN_MINE_ONLY = !ERN_MINE_ONLY;
+    renderEarnings();
+  });
+  renderEarnings();
+}
+
+function renderEarnings() {
+  const all = ERN.rows;
+  const mine = all.filter(r => r[7] === 1);
+  // Default to the watched names: 690 companies is a reference table, the 20 you
+  // actually hold positions around is the thing you came to check.
+  const rows = ERN_MINE_ONLY ? mine : all;
+  $('ernToggle').textContent = ERN_MINE_ONLY ? `显示全部 ${all.length} 场` : `只看我关注的 ${mine.length} 场`;
+  $('ernNote').textContent =
+    `${ERN.from} → ${ERN.to}（${ERN.trading_days} 个交易日）· 全市场 ${all.length} 场，`
+    + `其中关注的 ${mine.length} 场 · 抓取于 ${ERN.fetched_at}`
+    + `${ERN_MINE_ONLY ? '' : ` · 全部视图仅含市值 ≥ ${ernCap(ERN.min_market_cap)} 的公司`}`;
+
+  const byDate = new Map();
+  for (const r of rows) {
+    if (!byDate.has(r[0])) byDate.set(r[0], []);
+    byDate.get(r[0]).push(r);
+  }
+  const box = $('ernBody');
+  box.textContent = '';
+  if (!byDate.size) {
+    box.innerHTML = '<div class="msg">这段时间没有财报</div>';
+    return;
+  }
+  for (const [date, list] of byDate) {
+    const day = document.createElement('div');
+    day.className = 'ern-day';
+    const head = document.createElement('div');
+    head.className = 'ern-date';
+    const wd = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'][new Date(`${date}T12:00:00Z`).getUTCDay()];
+    head.textContent = `${date} ${wd}${date === TODAY ? ' · 今天' : ''}   ${list.length} 场`;
+    day.append(head);
+    for (const r of list) {
+      const [d, sym, name, slotv, cap, eps, , isMine] = r;
+      const row = document.createElement('div');
+      row.className = 'ern-row' + (isMine ? ' mine' : '');
+      const a = document.createElement('span');
+      a.className = 'sym';
+      a.textContent = sym;
+      // Only watched symbols have a page to jump to.
+      if (isMine && SYMBOLS.includes(sym)) a.addEventListener('click', () => selectSymbol(sym));
+      const nm = document.createElement('span'); nm.className = 'nm'; nm.textContent = name; nm.title = name;
+      const sl = document.createElement('span'); sl.className = 'slot';
+      sl.textContent = slotv === 'pre' ? '盘前' : slotv === 'post' ? '盘后' : '';
+      const cp = document.createElement('span'); cp.className = 'cap'; cp.textContent = ernCap(cap);
+      const ep = document.createElement('span'); ep.className = 'eps';
+      ep.textContent = eps ? `预期 ${eps}` : '';
+      row.append(a, nm, sl, cp, ep);
+      day.append(row);
+    }
+    box.append(day);
+  }
+}
+
 // ---------- short interest / securities lending ----------
 // data/<SYM>/short.json is rewritten by fetch-short.mjs on the daily run.
 // short.json also carries utilization / borrow_rate, but they are null for every
@@ -1048,6 +1147,8 @@ async function init() {
   });
   await loadSymbolData();
   await render();
+  // After the symbol view: this is reference data, not what the page is for.
+  loadEarnings();
 }
 // ---------- add symbol (dispatches the Add symbol GitHub workflow) ----------
 const REPO = 'xwu30/mxl-oi-monitor';

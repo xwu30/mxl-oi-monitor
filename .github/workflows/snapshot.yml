@@ -29,6 +29,13 @@ jobs:
       - name: Fetch short interest
         continue-on-error: true
         run: node fetch-short.mjs
+      # Earnings dates shift as companies confirm them, so re-fetch daily rather
+      # than trusting a week-old calendar. ~42 requests to a free public endpoint;
+      # never worth failing the OI snapshot over.
+      - name: Fetch earnings calendar
+        continue-on-error: true
+        run: node fetch-earnings.mjs
+
       # Runs on the freshly written snapshots but before the commit, so a failed
       # push never costs us the data. Skips itself when no channel secret is
       # set, so the job stays green until one is chosen.
