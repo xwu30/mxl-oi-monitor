@@ -120,17 +120,30 @@ async function extractOne(sym) {
   const text = decisionText(latest.report);
   if (!text.trim()) return { sym, skip: '报告无决策段落' };
 
-  const res = await fetch(`${BASE}/chat/completions`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${API_KEY}` },
-    body: JSON.stringify({
-      model: MODEL,
-      messages: [{ role: 'user', content: PROMPT + text.slice(0, 8000) }],
-      temperature: 0,
-      response_format: { type: 'json_object' },
-    }),
-  });
-  if (!res.ok) return { sym, error: `LLM ${res.status} ${(await res.text()).slice(0, 120)}` };
+  // Same fallback as analyze.py: the quick model's free grant can run out between
+  // the report and this extraction, and a 403 here leaves the page showing the
+  // previous report's levels. Only a free-tier exhaustion falls through to the
+  // fallback; any other error is real and is returned as-is.
+  const models = [MODEL];
+  const fallback = (process.env.TRADINGAGENTS_QUICK_FALLBACK_LLM || '').trim();
+  if (fallback && fallback !== MODEL) models.push(fallback);
+  let res, errText = '';
+  for (const model of models) {
+    res = await fetch(`${BASE}/chat/completions`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${API_KEY}` },
+      body: JSON.stringify({
+        model,
+        messages: [{ role: 'user', content: PROMPT + text.slice(0, 8000) }],
+        temperature: 0,
+        response_format: { type: 'json_object' },
+      }),
+    });
+    if (res.ok) break;
+    errText = await res.text();
+    if (!errText.includes('AllocationQuota.FreeTierOnly')) break;
+  }
+  if (!res.ok) return { sym, error: `LLM ${res.status} ${errText.slice(0, 120)}` };
 
   const raw = (await res.json())?.choices?.[0]?.message?.content ?? '';
   let parsed;

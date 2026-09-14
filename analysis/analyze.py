@@ -411,6 +411,66 @@ def resolve_provider() -> tuple[str, str, str]:
     )
 
 
+# What Model Studio returns once a model's free grant is spent while its
+# per-model "免费额度用完即停" toggle is still on.
+QUOTA_EXHAUSTED = "AllocationQuota.FreeTierOnly"
+
+
+def persist_quick_model(model: str, env_path: Path = HERE / ".env") -> bool:
+    """Write TRADINGAGENTS_QUICK_THINK_LLM back to .env so a switch sticks."""
+    try:
+        lines = env_path.read_text().splitlines()
+    except OSError:
+        return False
+    out, hit = [], False
+    for line in lines:
+        if line.startswith("TRADINGAGENTS_QUICK_THINK_LLM="):
+            out.append(f"TRADINGAGENTS_QUICK_THINK_LLM={model}")
+            hit = True
+        else:
+            out.append(line)
+    if not hit:
+        out.append(f"TRADINGAGENTS_QUICK_THINK_LLM={model}")
+    env_path.write_text("\n".join(out) + "\n")
+    return True
+
+
+def run_with_quota_fallback(symbol, date, depth, use_local, env_path: Path = HERE / ".env"):
+    """Run a symbol; if the free grant runs out, finish on the fallback model.
+
+    The plan (2026-09-14) is to spend what is left of qwen3.7-max's free grant
+    and only then drop to qwen3.7-flash. Nobody is watching for the moment it
+    runs out, and with the stop toggle on that moment is a 403 that kills a
+    twenty-minute run. TRADINGAGENTS_QUICK_FALLBACK_LLM names the model to
+    finish on.
+
+    .env is rewritten only after the fallback run succeeds, so a fallback that
+    is itself blocked never becomes the permanent setting. The error does not
+    say which model ran dry — it can be the deep model — so a second failure is
+    reported as such rather than blamed on the fallback.
+    """
+    try:
+        return run_symbol(symbol, date, depth, use_local)
+    except Exception as exc:
+        fallback = os.getenv("TRADINGAGENTS_QUICK_FALLBACK_LLM", "").strip()
+        current = os.getenv("TRADINGAGENTS_QUICK_THINK_LLM", "").strip()
+        if QUOTA_EXHAUSTED not in str(exc) or not fallback or fallback == current:
+            raise
+        print(f"[{symbol}] {current} 免费额度已用完，改用 {fallback} 重跑")
+        os.environ["TRADINGAGENTS_QUICK_THINK_LLM"] = fallback
+        try:
+            result = run_symbol(symbol, date, depth, use_local)
+        except Exception as exc2:
+            if QUOTA_EXHAUSTED in str(exc2):
+                print(f"[{symbol}] 换成 {fallback} 仍然额度用尽：{fallback} 或 deep 模型"
+                      f"（{os.getenv('TRADINGAGENTS_DEEP_THINK_LLM', '')}）还开着「免费额度用完即停」，"
+                      "需要在百炼控制台关掉并绑定付费方式", file=sys.stderr)
+            raise
+        if persist_quick_model(fallback, env_path):
+            print(f"[{symbol}] 已把 .env 的 quick 模型改成 {fallback}，之后的报告直接用它")
+        return result
+
+
 # ---------- local context: this repo's own data ----------
 def _load(path: Path):
     try:
@@ -716,7 +776,7 @@ def main() -> int:
     failures = []
     for symbol in symbols:
         try:
-            result = run_symbol(symbol, args.date, args.depth, not args.no_local_context)
+            result = run_with_quota_fallback(symbol, args.date, args.depth, not args.no_local_context)
         except Exception as exc:  # one bad symbol must not sink the batch
             print(f"[{symbol}] 失败：{exc}", file=sys.stderr)
             failures.append(symbol)
