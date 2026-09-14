@@ -71,16 +71,27 @@ PRICES = {
     # every report by ~60%, so the balance ran out well before the numbers said
     # it would. Re-check against the vendor page whenever a run looks cheap.
     "deepseek-v4-pro": (0.66, 1.98),
-    "deepseek-v4-flash": (0.22, 0.66),
-    "qwen3.7-flash": (0.03, 0.13),
-    # The dated snapshot carries its own free-quota allocation, separate from the
-    # rolling alias — the alias ran dry while this one sat untouched at 1M tokens.
-    # Same rate card; pin it and the reports keep costing flash money.
-    "qwen3.7-flash-2026-07-15": (0.03, 0.13),
-    # Model Studio list price; OpenRouter resells the same model at 0.32/1.28.
-    # The higher figure is quoted so a run is never reported cheaper than it was.
+    # Renamed upstream to "deepseek-flash" and cut to 0.15/0.60 off-peak; the old
+    # key stays so reports written under that name still price.
+    "deepseek-flash": (0.15, 0.60),
+    "deepseek-v4-flash": (0.15, 0.60),
+    # Model Studio Singapore list prices, rechecked 2026-09-14 — the third time
+    # this table has gone stale. qwen3.7-max sat here at (1.25, 3.75), half the
+    # real 2.50/7.50, so NKE 2026-09-10 logged $0.446 for a run that cost $0.875.
+    # Tiered models are quoted at the tier our calls actually land in (a single
+    # call never exceeds 256K), and qwen3.7-flash at its 32K-256K tier rather than
+    # the 0-32K one: we cannot see per-call sizes, and the convention here is that
+    # a run is never reported cheaper than it was.
+    "qwen3.7-max": (2.50, 7.50),
     "qwen3.7-plus": (0.40, 1.60),
-    "qwen3.7-max": (1.25, 3.75),
+    "qwen3.7-flash": (0.10, 0.40),
+    "qwen3.6-plus": (0.50, 3.00),
+    "qwen3.6-flash": (0.25, 1.50),
+    "qwen-max": (1.60, 6.40),
+    "qwen-plus": (0.40, 1.20),
+    "qwen-flash": (0.05, 0.40),
+    # Thinking-mode output price; non-thinking is 0.20.
+    "qwen-turbo": (0.05, 0.50),
 }
 
 
