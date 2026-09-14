@@ -1,17 +1,15 @@
 {
   "symbol": "GLW",
-  "from_report": "2026-08-17",
-  "rating": "Overweight",
-  "spot_at_extract": 147.24,
+  "from_report": "2026-09-14",
+  "rating": "Sell",
+  "spot_at_extract": 146.5325,
   "support": [
-    153,
-    162
+    125,
+    136.18,
+    145.37
   ],
-  "resistance": [
-    178,
-    191
-  ],
-  "stop_loss": 162,
-  "target": 190,
-  "extracted_at": "2026-08-25 15:13"
+  "resistance": [],
+  "stop_loss": 158.2,
+  "target": null,
+  "extracted_at": "2026-09-14 14:41"
 }
