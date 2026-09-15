@@ -167,7 +167,28 @@ async function extractOne(sym) {
   const quoted = (text.match(/\d+(?:\.\d+)?/g) || []).map(Number).filter(Number.isFinite);
   // Loose match: the same level shows up as 24.5 / 24.50 / $24.5, and a price
   // rounded in one sentence and exact in another is still the same level.
-  const grounded = v => quoted.some(q => Math.abs(q - v) <= Math.max(v * 0.001, 0.005));
+  const near = (a, b) => Math.abs(a - b) <= Math.max(b * 0.001, 0.005);
+  // A quoted band collapses to its midpoint by design — the prompt asks for it,
+  // "$9.60 - $9.70" -> 9.65 — and that midpoint appears nowhere in the text. The
+  // first version of this check rejected exactly those, so NOK 2026-09-14 lost its
+  // only support (the 9.60-9.70 200-day band) and its 11.50-12.00 resistance.
+  // Accept the midpoint of two quoted numbers within 10% of each other — a real
+  // band — but not of any pair at all: a 30,000-character report holds hundreds
+  // of numbers, and almost any value is the average of some unrelated two.
+  const sortedQuoted = [...new Set(quoted)].sort((a, b) => a - b);
+  const grounded = v => {
+    if (sortedQuoted.some(q => near(q, v))) return true;
+    for (let i = 0; i < sortedQuoted.length; i++) {
+      const a = sortedQuoted[i];
+      if (a > v) break;
+      for (let j = i + 1; j < sortedQuoted.length; j++) {
+        const b = sortedQuoted[j];
+        if (b > a * 1.10) break;
+        if (near((a + b) / 2, v)) return true;
+      }
+    }
+    return false;
+  };
 
   const sane = n => {
     const v = Number(n);
@@ -255,6 +276,28 @@ async function extractOne(sym) {
   };
   const proposed = [...(parsed.support || []), ...(parsed.resistance || [])].length;
   const directed = fixDirection(cleanSupport(parsed.support), cleanResistance(parsed.resistance));
+  // A bearish call's price target sits below the price, a bullish one above.
+  // NOK 2026-09-14 is Underweight at 9.705 yet came back with target 15 —
+  // Rosenblatt's price target, quoted in the social-sentiment section as someone
+  // else's opinion. The grounding check cannot catch that (15 really is in the
+  // text); the side it sits on gives it away. Hold carries no direction.
+  //
+  // Targets only, not stops. The first version checked stops too ("bearish stop
+  // above the price") and an audit of every levels.json found seven Underweight
+  // stops below the price — and those are right: Underweight means reduce, not
+  // short, so the stop protects the position still held and sits underneath.
+  // Only a short's stop sits above. Both sides are legitimate, so a stop's side
+  // proves nothing and checking it would throw away correct levels.
+  const bias = /underweight|sell/i.test(latest.report.decision || '') ? 'bear'
+    : /overweight|buy/i.test(latest.report.decision || '') ? 'bull' : '';
+  const sided = (label, v) => {
+    if (label !== 'target' || v == null || !spot || !bias) return v;
+    const above = v > spot;
+    const wantAbove = bias === 'bull';
+    if (above === wantAbove) return v;
+    dropped.push(`${label}=${v}（${latest.report.decision} 评级下${above ? '高于' : '低于'}现价，方向不符）`);
+    return null;
+  };
   const levels = {
     symbol: sym,
     from_report: latest.date,
@@ -262,8 +305,8 @@ async function extractOne(sym) {
     spot_at_extract: spot,
     support: directed.support,
     resistance: directed.resistance,
-    stop_loss: keep('stop_loss', parsed.stop_loss),
-    target: keep('target', parsed.target),
+    stop_loss: sided('stop_loss', keep('stop_loss', parsed.stop_loss)),
+    target: sided('target', keep('target', parsed.target)),
     extracted_at: nowET,
   };
   const kept = levels.support.length + levels.resistance.length;

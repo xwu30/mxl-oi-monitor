@@ -3,12 +3,14 @@
   "from_report": "2026-09-14",
   "rating": "Underweight",
   "spot_at_extract": 9.705,
-  "support": [],
+  "support": [
+    9.65
+  ],
   "resistance": [
     10.35,
-    12
+    11.88
   ],
   "stop_loss": 12.2,
-  "target": 15,
-  "extracted_at": "2026-09-14 21:09"
+  "target": null,
+  "extracted_at": "2026-09-14 21:14"
 }
