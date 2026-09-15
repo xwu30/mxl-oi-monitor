@@ -1,18 +1,14 @@
 {
   "symbol": "NOK",
-  "from_report": "2026-08-20",
+  "from_report": "2026-09-14",
   "rating": "Underweight",
-  "spot_at_extract": 10.3,
-  "support": [
-    8.41,
-    9.43
-  ],
+  "spot_at_extract": 9.705,
+  "support": [],
   "resistance": [
-    10.1,
-    10.64,
-    11.38
+    10.35,
+    12
   ],
-  "stop_loss": 11.4,
-  "target": 9.4,
-  "extracted_at": "2026-08-25 15:13"
+  "stop_loss": 12.2,
+  "target": 15,
+  "extracted_at": "2026-09-14 21:09"
 }
