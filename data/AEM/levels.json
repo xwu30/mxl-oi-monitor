@@ -1,16 +1,15 @@
 {
   "symbol": "AEM",
-  "from_report": "2026-08-16",
+  "from_report": "2026-09-15",
   "rating": "Hold",
-  "spot_at_extract": 219.135,
+  "spot_at_extract": 195.46,
   "support": [
-    158,
-    175
+    186.59
   ],
   "resistance": [
-    191.74
+    200.13
   ],
-  "stop_loss": 182.77,
+  "stop_loss": 192,
   "target": null,
-  "extracted_at": "2026-08-25 15:13"
+  "extracted_at": "2026-09-15 19:58"
 }
