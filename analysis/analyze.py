@@ -82,6 +82,8 @@ PRICES = {
     # call never exceeds 256K), and qwen3.7-flash at its 32K-256K tier rather than
     # the 0-32K one: we cannot see per-call sizes, and the convention here is that
     # a run is never reported cheaper than it was.
+    # 2026-08-25 上线的新一代 flash，自带独立免费额度；单一价位，无分档。
+    "qwen3.8-flash": (0.15, 0.47),
     "qwen3.7-max": (2.50, 7.50),
     "qwen3.7-plus": (0.40, 1.60),
     "qwen3.7-flash": (0.10, 0.40),
