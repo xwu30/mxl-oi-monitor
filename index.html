@@ -594,9 +594,12 @@ function reportTile() {
   const age = days <= 0 ? '今天' : `${days} 天前`;
   const stale = days >= REPORT_STALE_DAYS;
   const gen = ANALYSIS && ANALYSIS.generated_at ? `生成于 ${ANALYSIS.generated_at}` : '';
-  return tile('AI 报告',
-    `${date}${stale ? ' <span class="updn-down" style="font-size:13px">⚠</span>' : ''}`,
-    `${stale ? `<span class="updn-down">${age}，价位可能已失效</span>` : age}${gen ? ' · ' + gen : ''}`);
+  // The ⚠ goes on the description line, not after the date: in the value slot it
+  // wrapped onto its own line and made this tile taller than the other five,
+  // which reads as broken layout rather than as a warning.
+  return tile('AI 报告', date,
+    `${stale ? `<span class="updn-down">⚠ ${age}，价位可能已失效</span>` : age}`
+    + `${gen ? ' · ' + gen : ''}`);
 }
 
 function renderTiles(cur, rows, baseLabel, intra) {
@@ -1120,6 +1123,16 @@ function setOptionsUI(visible) {
   if (day && !visible) day.style.display = 'none';
 }
 
+// A-shares only: the tile row (and with it reportTile) never renders for them.
+function appendReportAgeToSubline() {
+  if (!AI_DATES.length) return;
+  const date = AI_DATES[AI_DATES.length - 1];
+  const days = Math.floor((Date.now() - Date.parse(`${date}T12:00:00Z`)) / 86400000);
+  const age = days <= 0 ? '今天' : `${days} 天前`;
+  const stale = days >= REPORT_STALE_DAYS;
+  $('subline').textContent += ` · 报告 ${date}（${age}${stale ? '，价位可能已失效' : ''}）`;
+}
+
 async function loadSymbolData() {
   try {
     INDEX = await loadJSON(fresh(`data/${SYM}/index.json`));
@@ -1130,15 +1143,18 @@ async function loadSymbolData() {
     setOptionsUI(false);
     $('pageTitle').textContent = `${symLabel(SYM)} 分析`;
     document.title = `${symLabel(SYM)} 分析`;
-    const rd = AI_DATES.length ? AI_DATES[AI_DATES.length - 1] : null;
-    $('subline').textContent = `${symLabel(SYM)} · 非美股标的，无期权持仓数据，仅显示 AI 分析`
-      + (rd ? ` · 报告 ${rd}` : '');
+    $('subline').textContent = `${symLabel(SYM)} · 非美股标的，无期权持仓数据，仅显示 AI 分析`;
     SHORT = null;
     // No option chain means no spot from a snapshot; the ladder falls back to
     // the price recorded when the levels were extracted.
     SPOT = null;
     await loadLevels();
     await loadAnalysis();
+    // After loadAnalysis, not before: AI_DATES is filled inside it, so reading it
+    // any earlier gets the empty array it was reset to and the date silently
+    // vanishes. A-shares have no tile row, so the subline is the only place the
+    // report's age can show at all.
+    appendReportAgeToSubline();
     return;
   }
   setOptionsUI(true);
