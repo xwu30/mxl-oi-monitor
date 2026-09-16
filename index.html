@@ -580,6 +580,25 @@ function ivTile(cur) {
     `未来 30 天定价 ±${(move * 100).toFixed(1)}%${dollars}`);
 }
 
+// How old the AI report is, in the tile row rather than buried in the analysis
+// card's metadata line. That line already carried the date, but behind a fold and
+// in the middle of "交易日 · 生成于 · 模型 · 深度 · 分析师" — so a stale report looked
+// exactly like a fresh one. Several this session were 18-30 days old with their
+// levels long since broken, and nothing on the page said so.
+const REPORT_STALE_DAYS = 14;
+function reportTile() {
+  if (!AI_DATES.length) return tile('AI 报告', '—', '尚未生成');
+  const date = AI_DATES[AI_DATES.length - 1];
+  // Parse as UTC noon so a timezone offset can never shift the day.
+  const days = Math.floor((Date.now() - Date.parse(`${date}T12:00:00Z`)) / 86400000);
+  const age = days <= 0 ? '今天' : `${days} 天前`;
+  const stale = days >= REPORT_STALE_DAYS;
+  const gen = ANALYSIS && ANALYSIS.generated_at ? `生成于 ${ANALYSIS.generated_at}` : '';
+  return tile('AI 报告',
+    `${date}${stale ? ' <span class="updn-down" style="font-size:13px">⚠</span>' : ''}`,
+    `${stale ? `<span class="updn-down">${age}，价位可能已失效</span>` : age}${gen ? ' · ' + gen : ''}`);
+}
+
 function renderTiles(cur, rows, baseLabel, intra) {
   const [kA, kB, dA, dB] = intra ? ['cv', 'pv', 'dcv', 'dpv'] : ['c', 'p', 'dc', 'dp'];
   const tc = rows.reduce((s, r) => s + r[kA], 0), tp = rows.reduce((s, r) => s + r[kB], 0);
@@ -594,7 +613,8 @@ function renderTiles(cur, rows, baseLabel, intra) {
     tile(`Call ${name}`, fmt(tc), `Δ ${signedSpan(dtc)}${vs}`) +
     tile(`Put ${name}`, fmt(tp), `Δ ${signedSpan(dtp)}${vs}`) +
     tile('Put / Call 比', tc > 0 ? (tp / tc).toFixed(2) : '—', intra ? '成交量口径' : 'OI 口径') +
-    ivTile(cur);
+    ivTile(cur) +
+    reportTile();
   // Keep the ladder's 现价 rung in step with the tile, including when the user
   // switches the date selectors to an older snapshot.
   SPOT = cur.spot;
@@ -1110,7 +1130,9 @@ async function loadSymbolData() {
     setOptionsUI(false);
     $('pageTitle').textContent = `${symLabel(SYM)} 分析`;
     document.title = `${symLabel(SYM)} 分析`;
-    $('subline').textContent = `${symLabel(SYM)} · 非美股标的，无期权持仓数据，仅显示 AI 分析`;
+    const rd = AI_DATES.length ? AI_DATES[AI_DATES.length - 1] : null;
+    $('subline').textContent = `${symLabel(SYM)} · 非美股标的，无期权持仓数据，仅显示 AI 分析`
+      + (rd ? ` · 报告 ${rd}` : '');
     SHORT = null;
     // No option chain means no spot from a snapshot; the ladder falls back to
     // the price recorded when the levels were extracted.
