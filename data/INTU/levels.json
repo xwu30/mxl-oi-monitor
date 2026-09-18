@@ -1,0 +1,17 @@
+{
+  "symbol": "INTU",
+  "from_report": "2026-09-18",
+  "rating": "Underweight",
+  "spot_at_extract": 301.7984,
+  "support": [
+    252.28,
+    289.9,
+    297.06
+  ],
+  "resistance": [
+    319
+  ],
+  "stop_loss": 337,
+  "target": 252.28,
+  "extracted_at": "2026-09-18 16:05"
+}
