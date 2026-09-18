@@ -1,20 +1,17 @@
 {
   "symbol": "603986.SS",
-  "from_report": "2026-08-14",
+  "from_report": "2026-09-18",
   "rating": "Underweight",
   "spot_at_extract": null,
   "support": [
-    330,
-    340,
-    385,
-    400
+    340.74,
+    356.56
   ],
   "resistance": [
-    426,
-    484.5,
-    530
+    408.5,
+    437.5
   ],
-  "stop_loss": 490,
+  "stop_loss": 356.56,
   "target": null,
-  "extracted_at": "2026-08-25 15:13"
+  "extracted_at": "2026-09-18 14:19"
 }

@@ -688,6 +688,29 @@ def run_symbol(symbol: str, trade_date: str, depth: str, use_local: bool) -> dic
         akshare_provider.register()
         config["data_vendors"] = akshare_provider.VENDORS
         print(f"[{symbol}] A 股标的 → 数据源切换为 AkShare（行情/财务/新闻/融资融券）")
+        # Drop the sentiment analyst for A-shares: it is the only node that has
+        # ever killed a run here, and it has nothing to work with anyway.
+        # Both its sources are English-language retail feeds — StockTwits 404s
+        # on these tickers and r/stocks / r/investing do not discuss 兆易创新 —
+        # so what reaches the model is whatever Chinese forum text the vendor
+        # scrapes instead. On 2026-09-18 that tripped Alibaba's input
+        # moderation and aborted the entire run:
+        #   400 InternalError.Algo.DataInspectionFailed:
+        #   Input text data may contain inappropriate content
+        # It died at this node before the debate started, so the cost is a
+        # whole report, not one thin section. A retry minutes later with the
+        # same config went through, so the block is intermittent rather than
+        # deterministic — which is the worse failure mode for a batch nobody
+        # is watching: it fails on some days and not others, with nothing in
+        # the run to explain why. market/news/fundamentals read the same
+        # Chinese sources through AkShare and have never been flagged.
+        #
+        # Rebind rather than .remove(): `analysts` IS the list stored in
+        # DEPTHS, so mutating it would strip social from every US symbol later
+        # in the same `--all` run, silently and with nothing in the log.
+        analysts = [a for a in analysts if a != "social"]
+        print(f"[{symbol}] 跳过情绪分析师（无英文社交数据，且会触发内容审核）"
+              f" → {','.join(analysts)}")
 
     tracker = UsageTracker()
     ta = TradingAgentsGraph(selected_analysts=analysts, debug=False, config=config,
