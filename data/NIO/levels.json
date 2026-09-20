@@ -1,0 +1,19 @@
+{
+  "symbol": "NIO",
+  "from_report": "2026-09-19",
+  "rating": "Sell",
+  "spot_at_extract": 3.67,
+  "support": [
+    3.26,
+    3.37,
+    3.55
+  ],
+  "resistance": [
+    3.76,
+    4.05,
+    4.42
+  ],
+  "stop_loss": 3.55,
+  "target": 3.26,
+  "extracted_at": "2026-09-19 21:09"
+}
