@@ -1,9 +1,7 @@
 {
   "symbol": "QQQ",
-  "from_report": "2026-09-01",
+  "from_report": "2026-09-23",
   "fired": {
-    "resistance@711": "2026-09-17",
-    "target@711": "2026-09-17",
-    "support@703": "2026-09-16"
+    "support@738.08": "2026-09-24"
   }
 }
