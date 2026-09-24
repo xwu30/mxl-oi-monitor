@@ -2,6 +2,7 @@
   "symbol": "CRCL",
   "from_report": "2026-09-15",
   "fired": {
-    "resistance@90": "2026-09-18"
+    "resistance@90": "2026-09-18",
+    "stop@92.5": "2026-09-24"
   }
 }
