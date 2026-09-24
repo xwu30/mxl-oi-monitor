@@ -126,6 +126,25 @@ async function snapshotSymbol(SYMBOL) {
     writeFileSync(`${root}/intraday/index.json`, JSON.stringify({ symbol: SYMBOL, days }));
   } else {
     mkdirSync(root, { recursive: true });
+
+    // The daily file keeps being written through the 2026-09-23 outage, and
+    // that is the right call — a day of open interest is worth keeping even a
+    // day late, and unlike the intraday series one stale row does not fake a
+    // flat session. What was missing is anyone saying so out loud: DRAM's
+    // report was built on 63.62 while the ETF traded at 60.72, 4.8% away, and
+    // nothing in the run hinted the price was two sessions old.
+    //
+    // Compare calendar days, not hours. Across 72 historical daily files the
+    // upstream stamp lands at 03, 18, 19 or 20 UTC, so any hour threshold
+    // either misses the 03:xx runs or cries wolf on them. But 70 of those 72
+    // carry the same date as the file, and the only two that do not are MSFT
+    // and DRAM from this outage — no false positives, both real cases caught.
+    const upstreamDay = String(json.timestamp ?? '').slice(0, 10);
+    if (/^\d{4}-\d{2}-\d{2}$/.test(upstreamDay) && upstreamDay < date) {
+      console.warn(`${SYMBOL}: ⚠ 上游数据是 ${upstreamDay} 的（timestamp ${json.timestamp} UTC），`
+        + `今天是 ${date} — 快照照写，但 spot ${snapshot.spot} 可能已过时`);
+    }
+
     writeFileSync(`${root}/${date}.json`, JSON.stringify(snapshot));
     console.log(`${SYMBOL}: wrote ${root}/${date}.json (${options.length} strikes, spot ${snapshot.spot}, iv30 ${snapshot.iv30 ?? 'n/a'})`);
 
