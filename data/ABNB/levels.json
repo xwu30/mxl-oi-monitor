@@ -1,0 +1,17 @@
+{
+  "symbol": "ABNB",
+  "from_report": "2026-09-25",
+  "rating": "Underweight",
+  "spot_at_extract": 151.96,
+  "support": [
+    142.69,
+    144.43
+  ],
+  "resistance": [
+    160.67,
+    163.66
+  ],
+  "stop_loss": 142.69,
+  "target": null,
+  "extracted_at": "2026-09-25 10:02"
+}
