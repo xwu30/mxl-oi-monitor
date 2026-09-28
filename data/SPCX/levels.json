@@ -1,16 +1,16 @@
 {
   "symbol": "SPCX",
-  "from_report": "2026-08-17",
-  "rating": "Underweight",
-  "spot_at_extract": 138.47,
+  "from_report": "2026-09-28",
+  "rating": "Hold",
+  "spot_at_extract": 146.325,
   "support": [
-    124,
-    135.5
+    136.4,
+    140.82
   ],
   "resistance": [
-    153
+    155.0
   ],
-  "stop_loss": 156,
-  "target": 135,
-  "extracted_at": "2026-08-25 15:13"
+  "stop_loss": 136.4,
+  "target": null,
+  "extracted_at": "2026-09-28 10:51"
 }
