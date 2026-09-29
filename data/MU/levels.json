@@ -1,20 +1,18 @@
 {
   "symbol": "MU",
-  "from_report": "2026-08-19",
-  "rating": "Underweight",
-  "spot_at_extract": 926.205,
+  "from_report": "2026-09-29",
+  "rating": "Hold",
+  "spot_at_extract": 1070.8199,
   "support": [
-    739,
-    766,
-    848,
-    900,
-    930
+    665.11,
+    949.78,
+    1005.7
   ],
   "resistance": [
-    956,
-    1018
+    1096.16,
+    1121.82
   ],
-  "stop_loss": 1036,
-  "target": 850,
-  "extracted_at": "2026-08-25 15:13"
+  "stop_loss": 1005.7,
+  "target": null,
+  "extracted_at": "2026-09-29 16:07"
 }
