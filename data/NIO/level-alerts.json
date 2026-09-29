@@ -2,6 +2,8 @@
   "symbol": "NIO",
   "from_report": "2026-09-19",
   "fired": {
-    "resistance@3.76": "2026-09-22"
+    "resistance@3.76": "2026-09-22",
+    "support@3.55": "2026-09-29",
+    "stop@3.55": "2026-09-29"
   }
 }
