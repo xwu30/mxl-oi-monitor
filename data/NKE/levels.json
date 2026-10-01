@@ -1,16 +1,17 @@
 {
   "symbol": "NKE",
-  "from_report": "2026-09-10",
+  "from_report": "2026-10-01",
   "rating": "Hold",
-  "spot_at_extract": 37.37,
+  "spot_at_extract": 32.18,
   "support": [
-    35,
-    36.79
+    34.49
   ],
   "resistance": [
-    39.09
+    35.97,
+    36.49,
+    38.85
   ],
-  "stop_loss": 40,
+  "stop_loss": null,
   "target": null,
-  "extracted_at": "2026-09-10 11:28"
+  "extracted_at": "2026-10-01 19:51"
 }
