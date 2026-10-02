@@ -1,15 +1,7 @@
 {
   "symbol": "MU",
-  "from_report": "2026-08-19",
+  "from_report": "2026-09-29",
   "fired": {
-    "support@930": "2026-09-16",
-    "resistance@950": "2026-09-03",
-    "resistance@962": "2026-09-04",
-    "resistance@1000": "2026-09-09",
-    "resistance@1023": "2026-09-09",
-    "resistance@1036": "2026-09-09",
-    "stop@1036": "2026-09-28",
-    "resistance@956": "2026-09-17",
-    "resistance@1018": "2026-09-21"
+    "resistance@1096.16": "2026-10-02"
   }
 }
