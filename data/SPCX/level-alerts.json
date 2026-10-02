@@ -1,9 +1,7 @@
 {
   "symbol": "SPCX",
-  "from_report": "2026-08-17",
+  "from_report": "2026-09-28",
   "fired": {
-    "resistance@150": "2026-09-08",
-    "resistance@153": "2026-09-22",
-    "stop@156": "2026-09-21"
+    "resistance@155": "2026-10-02"
   }
 }
