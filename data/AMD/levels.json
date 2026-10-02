@@ -1,17 +1,17 @@
 {
   "symbol": "AMD",
-  "from_report": "2026-08-17",
-  "rating": "Overweight",
-  "spot_at_extract": 475.7,
+  "from_report": "2026-10-02",
+  "rating": "Hold",
+  "spot_at_extract": 631.63,
   "support": [
-    494
+    566.4,
+    589.71,
+    605.38
   ],
   "resistance": [
-    514.39,
-    552.33,
-    580.91
+    645.46
   ],
-  "stop_loss": 490,
-  "target": 556,
-  "extracted_at": "2026-08-25 15:13"
+  "stop_loss": 566.4,
+  "target": 679.75,
+  "extracted_at": "2026-10-02 15:27"
 }
