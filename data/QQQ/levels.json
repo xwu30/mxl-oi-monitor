@@ -3,7 +3,10 @@
   "from_report": "2026-10-08",
   "rating": "Underweight",
   "spot_at_extract": 747.02,
-  "support": [],
+  "support": [
+    722.62,
+    735.46
+  ],
   "resistance": [
     761.26
   ],
