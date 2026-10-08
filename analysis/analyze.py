@@ -675,11 +675,14 @@ def run_symbol(symbol: str, trade_date: str, depth: str, use_local: bool) -> dic
         config["temperature"] = 0.2
     config["output_language"] = os.getenv("TRADINGAGENTS_OUTPUT_LANGUAGE", "Chinese")
     config["results_dir"] = str(HERE / "reports")
-    # yfinance's news endpoint returns nothing as of 2026-08; Alpha Vantage's
-    # free tier fills that gap when a key is present, otherwise the news and
-    # sentiment analysts run thin.
+    # Alpha Vantage's free tier gives richer news than yfinance when a key is
+    # present, but its daily quota can exhaust mid-session (TD hit this twice
+    # in a row on 2026-10-07/08, not a one-off transient rate limit). List it
+    # as a fallback chain rather than the sole vendor: route_to_vendor() only
+    # raises "No available vendor" once every vendor in the chain has failed,
+    # so a quota hit now degrades to yfinance instead of failing the run.
     if os.getenv("ALPHA_VANTAGE_API_KEY"):
-        config["data_vendors"] = {**config["data_vendors"], "news_data": "alpha_vantage"}
+        config["data_vendors"] = {**config["data_vendors"], "news_data": "alpha_vantage,yfinance"}
 
     # A-shares route everything through AkShare instead: yfinance carries prices
     # but little else for them, and Alpha Vantage rejects the ticker outright.
