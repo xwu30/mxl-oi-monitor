@@ -1,18 +1,16 @@
 {
   "symbol": "SNDK",
-  "from_report": "2026-08-28",
-  "rating": "Hold",
-  "spot_at_extract": 1481.89,
+  "from_report": "2026-10-08",
+  "rating": "Underweight",
+  "spot_at_extract": 1612.9003,
   "support": [
-    970,
-    1417.5
+    1502.36,
+    1576.46
   ],
   "resistance": [
-    1520,
-    1600,
-    1700
+    1720.5
   ],
-  "stop_loss": null,
-  "target": 1900,
-  "extracted_at": "2026-08-28 23:18"
+  "stop_loss": 1502.36,
+  "target": null,
+  "extracted_at": "2026-10-08 23:33"
 }
