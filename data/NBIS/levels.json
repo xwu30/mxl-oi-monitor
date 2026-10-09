@@ -1,15 +1,16 @@
 {
   "symbol": "NBIS",
-  "from_report": "2026-08-28",
-  "rating": "Overweight",
-  "spot_at_extract": 208.6,
+  "from_report": "2026-10-08",
+  "rating": "Underweight",
+  "spot_at_extract": 220.8,
   "support": [
-    195
+    207.11
   ],
   "resistance": [
-    235
+    229.19,
+    252.5
   ],
-  "stop_loss": 185,
-  "target": 270,
-  "extracted_at": "2026-08-28 23:18"
+  "stop_loss": 207.11,
+  "target": null,
+  "extracted_at": "2026-10-08 21:24"
 }

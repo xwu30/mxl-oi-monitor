@@ -1,15 +1,17 @@
 {
   "symbol": "MRVL",
-  "from_report": "2026-08-18",
-  "rating": "Underweight",
-  "spot_at_extract": 242.62,
+  "from_report": "2026-10-08",
+  "rating": "Hold",
+  "spot_at_extract": 273.85,
   "support": [
-    202.44
+    170.79,
+    234.65,
+    270.67
   ],
   "resistance": [
-    237
+    290
   ],
-  "stop_loss": 200,
-  "target": 175,
-  "extracted_at": "2026-08-25 15:13"
+  "stop_loss": null,
+  "target": null,
+  "extracted_at": "2026-10-08 22:03"
 }

@@ -1,19 +1,15 @@
 {
   "symbol": "NOW",
-  "from_report": "2026-08-17",
-  "rating": "Buy",
-  "spot_at_extract": 127.5543,
+  "from_report": "2026-10-08",
+  "rating": "Underweight",
+  "spot_at_extract": 139.65,
   "support": [
-    92,
-    100,
-    107,
-    114
+    136.65
   ],
   "resistance": [
-    121,
-    127
+    143.04
   ],
-  "stop_loss": 107.67,
-  "target": 175,
-  "extracted_at": "2026-08-25 15:13"
+  "stop_loss": 128.12,
+  "target": null,
+  "extracted_at": "2026-10-08 23:02"
 }
