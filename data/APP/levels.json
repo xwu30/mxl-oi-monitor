@@ -1,0 +1,17 @@
+{
+  "symbol": "APP",
+  "from_report": "2026-10-14",
+  "rating": "Hold",
+  "spot_at_extract": 264.77,
+  "support": [
+    252.04,
+    263.85
+  ],
+  "resistance": [
+    278.62,
+    294.45
+  ],
+  "stop_loss": 240,
+  "target": 294.45,
+  "extracted_at": "2026-10-14 12:03"
+}
