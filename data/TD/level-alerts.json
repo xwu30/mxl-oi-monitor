@@ -1,7 +1,7 @@
 {
   "symbol": "TD",
-  "from_report": "2026-08-29",
+  "from_report": "2026-10-08",
   "fired": {
-    "stop@116.55": "2026-10-08"
+    "resistance@117.45": "2026-10-14"
   }
 }
