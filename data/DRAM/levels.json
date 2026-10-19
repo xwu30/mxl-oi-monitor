@@ -1,22 +1,19 @@
 {
   "symbol": "DRAM",
-  "from_report": "2026-09-24",
+  "from_report": "2026-10-19",
   "rating": "Underweight",
-  "spot_at_extract": 60.72,
+  "spot_at_extract": 49.205,
   "support": [
-    49.6,
-    52.86,
-    54.59,
-    55.71,
-    58.36,
-    59.92
+    44.4,
+    46.3
   ],
   "resistance": [
-    63.86,
-    65.86,
-    68.69
+    50.5,
+    52.65,
+    54.67,
+    57.33
   ],
-  "stop_loss": 58.36,
+  "stop_loss": 46.3,
   "target": null,
-  "extracted_at": "2026-09-24 10:12"
+  "extracted_at": "2026-10-19 12:16"
 }
