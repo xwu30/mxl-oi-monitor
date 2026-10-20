@@ -1,10 +1,7 @@
 {
   "symbol": "META",
-  "from_report": "2026-08-25",
+  "from_report": "2026-09-21",
   "fired": {
-    "resistance@571": "2026-09-01",
-    "resistance@592": "2026-09-02",
-    "target@592": "2026-09-02",
-    "resistance@622.68": "2026-09-09"
+    "resistance@686.5": "2026-10-20"
   }
 }
