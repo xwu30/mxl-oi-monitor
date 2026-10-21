@@ -1,14 +1,15 @@
 {
   "symbol": "LULU",
-  "from_report": "2026-09-03",
-  "rating": "Sell",
-  "spot_at_extract": 99.65,
-  "support": [],
-  "resistance": [
-    112,
-    123.5
+  "from_report": "2026-10-21",
+  "rating": "Hold",
+  "spot_at_extract": 100.1763,
+  "support": [
+    90.45
   ],
-  "stop_loss": 125,
-  "target": 85,
-  "extracted_at": "2026-09-03 22:36"
+  "resistance": [
+    101.58
+  ],
+  "stop_loss": 90.45,
+  "target": null,
+  "extracted_at": "2026-10-21 10:33"
 }
