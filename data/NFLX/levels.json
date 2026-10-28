@@ -1,0 +1,17 @@
+{
+  "symbol": "NFLX",
+  "from_report": "2026-10-28",
+  "rating": "Underweight",
+  "spot_at_extract": 61.745,
+  "support": [
+    61.65
+  ],
+  "resistance": [
+    65.38,
+    67.61,
+    71.85
+  ],
+  "stop_loss": 58.71,
+  "target": 58,
+  "extracted_at": "2026-10-28 14:07"
+}
