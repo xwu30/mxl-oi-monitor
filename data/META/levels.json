@@ -1,17 +1,15 @@
 {
   "symbol": "META",
-  "from_report": "2026-09-21",
-  "rating": "Underweight",
-  "spot_at_extract": 671.405,
+  "from_report": "2026-10-29",
+  "rating": "Hold",
+  "spot_at_extract": 622,
   "support": [
-    613.48,
-    638.56,
-    652.03
+    598
   ],
   "resistance": [
-    686.5
+    631
   ],
-  "stop_loss": 613.48,
-  "target": null,
-  "extracted_at": "2026-09-21 21:14"
+  "stop_loss": 583,
+  "target": 631,
+  "extracted_at": "2026-10-29 10:02"
 }
