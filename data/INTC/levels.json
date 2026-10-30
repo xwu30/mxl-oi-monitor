@@ -1,15 +1,16 @@
 {
   "symbol": "INTC",
-  "from_report": "2026-09-15",
-  "rating": "Hold",
-  "spot_at_extract": 96.775,
-  "support": [
-    90
-  ],
+  "from_report": "2026-10-29",
+  "rating": "Sell",
+  "spot_at_extract": 70.87,
+  "support": [],
   "resistance": [
-    102.58
+    78.9,
+    81.79,
+    85.07,
+    99.07
   ],
-  "stop_loss": 89.4,
-  "target": null,
-  "extracted_at": "2026-09-15 20:45"
+  "stop_loss": 86.78,
+  "target": 65,
+  "extracted_at": "2026-10-29 22:08"
 }
