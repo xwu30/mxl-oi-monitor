@@ -1,9 +1,7 @@
 {
   "symbol": "TSLA",
-  "from_report": "2026-10-05",
+  "from_report": "2026-10-28",
   "fired": {
-    "resistance@384.15": "2026-10-26",
-    "support@366.1": "2026-10-16",
-    "resistance@392.63": "2026-10-27"
+    "resistance@409.5": "2026-11-02"
   }
 }
