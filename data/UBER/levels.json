@@ -1,0 +1,15 @@
+{
+  "symbol": "UBER",
+  "from_report": "2026-11-03",
+  "rating": "Underweight",
+  "spot_at_extract": 66.635,
+  "support": [
+    63.99
+  ],
+  "resistance": [
+    70.72
+  ],
+  "stop_loss": 70.72,
+  "target": 64,
+  "extracted_at": "2026-11-03 15:38"
+}
