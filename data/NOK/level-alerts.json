@@ -1,8 +1,7 @@
 {
   "symbol": "NOK",
-  "from_report": "2026-09-14",
+  "from_report": "2026-11-03",
   "fired": {
-    "resistance@10.35": "2026-10-09",
-    "support@9.65": "2026-10-14"
+    "support@7.8": "2026-11-05"
   }
 }
