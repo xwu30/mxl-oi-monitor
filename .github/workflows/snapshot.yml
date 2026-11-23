@@ -42,6 +42,12 @@ jobs:
         continue-on-error: true
         run: node fetch-events.mjs
 
+      # Pure local computation over the snapshot just fetched (no network call),
+      # so a failure here should never cost the OI data itself.
+      - name: Compute gamma walls
+        continue-on-error: true
+        run: node gamma-walls.mjs
+
       # Runs on the freshly written snapshots but before the commit, so a failed
       # push never costs us the data. Skips itself when no channel secret is
       # set, so the job stays green until one is chosen.

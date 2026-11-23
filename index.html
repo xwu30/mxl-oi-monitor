@@ -275,6 +275,14 @@
     <div class="chartscroll" id="chartDist"></div>
   </div>
 
+  <div class="card" id="gammaCard" style="display:none">
+    <h2>Gamma 墙 / 阻力支撑（OI 口径）</h2>
+    <div class="note" id="gammaNote"></div>
+    <div class="ladder" id="gammaLadder"></div>
+    <div class="panel-title" style="margin-top:14px">近 10 日走势</div>
+    <div class="tablewrap" id="gammaHistBox"></div>
+  </div>
+
   <div class="card">
     <h2>明细表</h2>
     <div class="note" id="tableNote"></div>
@@ -782,6 +790,62 @@ function renderLevels() {
     + `<b>报告结论未经回测验证</b>，价位仅供对照，非买卖建议。`;
 }
 
+// ---------- gamma walls (OI/volume concentration) ----------
+// data/<SYM>/gamma_walls.json is written by gamma-walls.mjs on the daily cron:
+// for each day, the strike holding the most aggregate open interest on each
+// side (summed across every expiry) stands in for a "call wall" / "put wall" —
+// a positioning proxy, not a true dealer-gamma number (the free delayed feed
+// carries no per-contract greeks).
+let GAMMA = null;
+
+async function loadGammaWalls() {
+  try { GAMMA = await loadJSON(fresh(`data/${SYM}/gamma_walls.json`)); } catch { GAMMA = null; }
+  renderGammaWalls();
+}
+
+function renderGammaWalls() {
+  const card = $('gammaCard');
+  const hist = GAMMA?.history || [];
+  if (!hist.length) { card.style.display = 'none'; return; }
+  card.style.display = '';
+
+  const cur = hist[hist.length - 1];
+  const spot = (typeof SPOT === 'number') ? SPOT : cur.spot;
+  const px = v => (v >= 100 ? v.toFixed(1) : v.toFixed(2));
+
+  const rows = [];
+  if (cur.call_wall != null) rows.push({ v: cur.call_wall, kind: 'res', label: 'Call 墙（阻力）', tag: `OI ${fmt(cur.call_wall_oi)}` });
+  if (cur.put_wall != null) rows.push({ v: cur.put_wall, kind: 'sup', label: 'Put 墙（支撑）', tag: `OI ${fmt(cur.put_wall_oi)}` });
+  if (spot != null) rows.push({ v: spot, kind: 'spot', label: '现价' });
+  rows.sort((a, b) => b.v - a.v);
+
+  $('gammaLadder').innerHTML = rows.map(r => {
+    const gap = (spot != null && r.kind !== 'spot')
+      ? `${r.v > spot ? '+' : ''}${((r.v / spot - 1) * 100).toFixed(1)}%` : '';
+    return `<div class="rung ${r.kind}">
+      <span class="kind">${r.label}</span>
+      <span class="px">$${px(r.v)}</span>
+      <span class="gap">${gap}</span>
+      <span class="tag">${r.tag || ''}</span>
+    </div>`;
+  }).join('');
+
+  const recent = hist.slice(-10).reverse();
+  $('gammaHistBox').innerHTML = `<table><thead><tr>
+      <th>日期</th><th>正股价</th><th class="sep">Call 墙</th><th>Put 墙</th>
+      <th class="sep">今日最热 Call 行权价</th><th>今日最热 Put 行权价</th>
+    </tr></thead><tbody>${recent.map(r => `<tr>
+      <td>${r.date}</td><td>$${r.spot}</td>
+      <td class="sep">$${r.call_wall ?? '—'}</td><td>$${r.put_wall ?? '—'}</td>
+      <td class="sep">${r.call_hot_strike != null ? '$' + r.call_hot_strike : '—'}</td>
+      <td>${r.put_hot_strike != null ? '$' + r.put_hot_strike : '—'}</td>
+    </tr>`).join('')}</tbody></table>`;
+
+  $('gammaNote').innerHTML = `取「Call 墙」「Put 墙」= 当日各到期日未平仓量（OI）按行权价汇总后的最大值所在价位，`
+    + `经验上 Call 墙常对应上方阻力、Put 墙常对应下方支撑；「最热行权价」改用<b>当日成交量</b>汇总，反映当天资金在哪个价位最活跃，`
+    + `与 OI 口径的墙未必是同一个价位。<b>这是持仓集中度的统计推断，不是真实做市商 Gamma 敞口计算</b>（免费数据源不含逐笔 Greeks），仅供参考，非买卖建议。`;
+}
+
 // ---------- earnings calendar ----------
 // data/earnings.json is rewritten by fetch-earnings.mjs on the daily run. It is
 // market-wide, not per-symbol, so it loads once and never reloads on tab switch.
@@ -1148,6 +1212,8 @@ async function loadSymbolData() {
     // No option chain means no spot from a snapshot; the ladder falls back to
     // the price recorded when the levels were extracted.
     SPOT = null;
+    GAMMA = null;
+    renderGammaWalls();
     await loadLevels();
     await loadAnalysis();
     // After loadAnalysis, not before: AI_DATES is filled inside it, so reading it
@@ -1174,6 +1240,7 @@ async function loadSymbolData() {
   try { SHORT = await loadJSON(fresh(`data/${SYM}/short.json`)); } catch { SHORT = null; }
   renderShort();
   await loadLevels();
+  await loadGammaWalls();
   await loadAnalysis();
   setupModeSelectors();
 }
