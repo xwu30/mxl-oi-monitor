@@ -1,16 +1,16 @@
 {
   "symbol": "QQQ",
-  "from_report": "2026-10-08",
+  "from_report": "2026-11-20",
   "rating": "Underweight",
-  "spot_at_extract": 747.02,
+  "spot_at_extract": 667.71,
   "support": [
-    722.62,
-    735.46
+    632
   ],
   "resistance": [
-    761.26
+    659.45,
+    681.12
   ],
-  "stop_loss": 743.23,
-  "target": null,
-  "extracted_at": "2026-10-08 15:17"
+  "stop_loss": 683.5,
+  "target": 600,
+  "extracted_at": "2026-11-20 10:23"
 }

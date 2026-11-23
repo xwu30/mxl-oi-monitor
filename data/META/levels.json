@@ -1,17 +1,16 @@
 {
   "symbol": "META",
-  "from_report": "2026-11-04",
+  "from_report": "2026-11-23",
   "rating": "Underweight",
-  "spot_at_extract": 639.86,
+  "spot_at_extract": 620.7503,
   "support": [
-    606,
-    631.41
+    558.68,
+    579
   ],
   "resistance": [
-    645.53,
-    673.97
+    616.79
   ],
-  "stop_loss": 606.41,
-  "target": 620,
-  "extracted_at": "2026-11-04 13:35"
+  "stop_loss": 627.57,
+  "target": 560,
+  "extracted_at": "2026-11-23 13:01"
 }
